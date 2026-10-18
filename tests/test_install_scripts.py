@@ -22,5 +22,11 @@ class InstallScriptTests(unittest.TestCase):
         self.assertIn("dnsmasq-ap.conf", install)
         self.assertIn("if [[ ! -e /etc/bt-signature-detector/dnsmasq-ap.conf ]]", install)
 
+    def test_shell_scripts_are_kept_as_lf_for_bash_on_linux(self):
+        attributes = (self.root / ".gitattributes").read_text()
+        self.assertIn("*.sh text eol=lf", attributes)
+        for script in (self.root / "scripts").glob("*.sh"):
+            self.assertNotIn(b"\r", script.read_bytes(), script.name)
+
 
 if __name__ == "__main__": unittest.main()
