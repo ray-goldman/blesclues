@@ -1,0 +1,3 @@
+bt-web ALL=(root) NOPASSWD: /opt/bt-signature-detector/active/bin/python -m bt_signature_detector.ap_helper
+bt-web ALL=(root) NOPASSWD: /usr/local/sbin/bt-detector-apply-update
+bt-web ALL=(root) NOPASSWD: /usr/local/sbin/bt-detector-restart-scanner

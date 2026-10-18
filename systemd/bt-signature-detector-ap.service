@@ -1,0 +1,16 @@
+[Unit]
+Description=Activate local Bluetooth Detector Wi-Fi access point
+After=NetworkManager.service
+Requires=NetworkManager.service
+Before=bt-signature-detector-dhcp.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/bt-signature-detector/active/bin/python -m bt_signature_detector.ap_helper activate --config /etc/bt-signature-detector/detector.yaml
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

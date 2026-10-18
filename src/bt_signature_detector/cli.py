@@ -16,6 +16,7 @@ from .notifications.audio import AudioNotifier
 from .notifications.dispatcher import NotificationDispatcher
 from .notifications.ntfy import NtfyNotifier
 from .notifications.sms import SmsNotifier
+from .runtime_cache import RuntimeScanCache
 
 
 def _parser():
@@ -40,11 +41,15 @@ def main(argv=None):
             print(f"Configuration valid: {args.config}")
             return 0
         signatures_path = args.signatures if args.command == "list-signatures" and args.signatures else config.detection.signature_file
-        signatures = load_signatures(signatures_path)
+        if not signatures_path.is_absolute():
+            signatures_path = args.config.resolve().parent / signatures_path
+        signatures = () if args.command == "test-alert" else load_signatures(signatures_path)
         if args.command == "list-signatures":
             for signature in signatures: print(f"{signature.signature_id}\t{signature.confidence.value}\t{signature.name}")
             return 0
         store = EventStore(config.storage.path, retention_days=config.storage.retention_days, max_events=config.storage.max_events)
+        from datetime import datetime, timezone
+        store.prune(datetime.now(timezone.utc))
         if args.command == "recent":
             for event in store.recent(args.limit): print(f"{event.last_seen.isoformat()}\t{event.signature_name}\t{event.observed_identifier}")
             return 0
@@ -87,7 +92,9 @@ def main(argv=None):
         pipeline = DetectionPipeline(signatures, store=store,
             cooldown_seconds=config.detection.cooldown_seconds,
             absence_seconds=config.detection.absence_seconds,
-            global_min_rssi=config.detection.global_min_rssi, dispatcher=dispatcher)
+            global_min_rssi=config.detection.global_min_rssi, dispatcher=dispatcher,
+            scan_cache=RuntimeScanCache(Path("/run/bt-signature-detector/scans.json"), config.web.max_live_scans)
+            if sys.platform != "win32" and Path("/run/bt-signature-detector").is_dir() else None)
         async def run():
             await dispatcher.start()
             stop = asyncio.Event()

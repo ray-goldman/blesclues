@@ -27,6 +27,7 @@ class Advertisement:
     def __post_init__(self) -> None:
         if self.timestamp.tzinfo is None or self.timestamp.utcoffset() is None:
             raise ValueError("advertisement timestamp must be timezone-aware")
+        object.__setattr__(self, "timestamp", self.timestamp.astimezone(timezone.utc))
         object.__setattr__(self, "manufacturer_data", MappingProxyType(dict(self.manufacturer_data)))
         object.__setattr__(self, "service_data", MappingProxyType(dict(self.service_data)))
         object.__setattr__(self, "service_uuids", tuple(self.service_uuids))
@@ -74,4 +75,11 @@ class DetectionEvent:
     observation_count: int
     event_id: str = field(default_factory=lambda: str(uuid4()))
     alert_enabled: bool = False
+
+    def __post_init__(self) -> None:
+        for field_name in ("first_seen", "last_seen"):
+            value = getattr(self, field_name)
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError(f"{field_name} must be timezone-aware")
+            object.__setattr__(self, field_name, value.astimezone(timezone.utc))
 

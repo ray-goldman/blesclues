@@ -8,7 +8,7 @@ bluetooth:
       ad_data_type: 255
       pattern: "010203"
 detection:
-  signature_file: config/signatures.example.yaml
+  signature_file: signatures.example.yaml
   min_observations: 3
   cooldown_seconds: 300
 storage:
@@ -24,9 +24,12 @@ access_point:
   enabled: true
   ssid: BLE-Detector
   passphrase: easypassword
+  country: ""
 web:
   enabled: true
   port: 8080
+  password_hash_file: /var/lib/bt-signature-detector/web/ui-password.hash
+  session_key_file: /var/lib/bt-signature-detector/web/ui-session.key
 updates:
   enabled: true
   manifest_url: null

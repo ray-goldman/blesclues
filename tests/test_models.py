@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 from dataclasses import FrozenInstanceError
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from bt_signature_detector.models import Advertisement, Confidence
 
@@ -26,6 +26,11 @@ class AdvertisementModelTests(unittest.TestCase):
 
     def test_confidence_values_are_closed_classification_set(self) -> None:
         self.assertEqual({item.value for item in Confidence}, {"confirmed", "possible", "unknown"})
+
+    def test_timestamps_normalize_to_utc(self) -> None:
+        timestamp = datetime(2026, 1, 1, 2, tzinfo=timezone(timedelta(hours=2)))
+        observed = Advertisement(identifier="AA:BB", timestamp=timestamp)
+        self.assertEqual(observed.timestamp, datetime(2026, 1, 1, tzinfo=timezone.utc))
 
 
 if __name__ == "__main__":

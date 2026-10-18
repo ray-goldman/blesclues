@@ -1,0 +1,14 @@
+[Unit]
+Description=Apply verified BLE Detector release %i
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/bt-signature-detector/active/bin/python -m bt_signature_detector.updater_service apply --id %i
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/bt-signature-detector /var/lib/bt-signature-detector
+StandardOutput=journal
+StandardError=journal

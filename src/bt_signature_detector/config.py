@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Any
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -300,8 +301,10 @@ def validate_config_data(data: Mapping[str, object]) -> AppConfig:
 
     u = _section(root, "updates", {"enabled", "manifest_url", "public_key_file", "max_bundle_bytes", "timeout_seconds"})
     manifest_url = u.get("manifest_url")
-    if manifest_url is not None and (not isinstance(manifest_url, str) or not manifest_url.startswith("https://")):
-        raise ValueError("updates.manifest_url must be an HTTPS URL or null")
+    if manifest_url is not None:
+        parsed_url = urlsplit(manifest_url) if isinstance(manifest_url, str) else None
+        if parsed_url is None or parsed_url.scheme != "https" or not parsed_url.hostname or parsed_url.username or parsed_url.password or parsed_url.fragment:
+            raise ValueError("updates.manifest_url must be a valid HTTPS URL or null")
     updates = UpdateConfig(
         enabled=_bool(u.get("enabled", True), "updates.enabled"),
         manifest_url=manifest_url,

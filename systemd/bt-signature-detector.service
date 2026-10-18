@@ -1,0 +1,29 @@
+[Unit]
+Description=Bluetooth Signature Detector scanner
+After=bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=simple
+User=bt-detector
+Group=bt-detector
+SupplementaryGroups=bluetooth
+WorkingDirectory=/var/lib/bt-signature-detector
+EnvironmentFile=-/etc/bt-signature-detector/environment
+ExecStart=/opt/bt-signature-detector/active/bin/detector scan --config /etc/bt-signature-detector/detector.yaml
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RuntimeDirectory=bt-signature-detector
+RuntimeDirectoryMode=0770
+RuntimeDirectoryGroup=bt-detector
+RuntimeDirectoryPreserve=yes
+ReadWritePaths=/var/lib/bt-signature-detector /etc/bt-signature-detector
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

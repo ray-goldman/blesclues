@@ -116,7 +116,7 @@ def load_signatures(path: Path) -> tuple[Signature, ...]:
         confidence_raw = item.get("confidence", "unknown")
         try:
             confidence = Confidence(confidence_raw)
-        except ValueError as exc:
+        except (ValueError, TypeError) as exc:
             raise ValueError(f"{prefix}.confidence is invalid") from exc
         min_rssi = item.get("min_rssi")
         if min_rssi is not None and (isinstance(min_rssi, bool) or not isinstance(min_rssi, int) or not -127 <= min_rssi <= 20):
@@ -124,7 +124,11 @@ def load_signatures(path: Path) -> tuple[Signature, ...]:
         observations = item.get("min_observations", 3)
         if isinstance(observations, bool) or not isinstance(observations, int) or observations < 3:
             raise ValueError(f"{prefix}.min_observations must be at least 3")
-        result.append(Signature(identifier, label, confidence, manufacturer_id, manufacturer_pattern, manufacturer_mask, service_uuids, service_data, name_pattern, "contains" if name_contains is not None else "exact", exact_identifiers, min_rssi, observations, mode, str(item.get("evidence", "")), bool(item.get("alert_enabled", False))))
+        alert_enabled = item.get("alert_enabled", False)
+        if not isinstance(alert_enabled, bool): raise ValueError(f"{prefix}.alert_enabled must be true or false")
+        evidence = item.get("evidence", "")
+        if not isinstance(evidence, str): raise ValueError(f"{prefix}.evidence must be a string")
+        result.append(Signature(identifier, label, confidence, manufacturer_id, manufacturer_pattern, manufacturer_mask, service_uuids, service_data, name_pattern, "contains" if name_contains is not None else "exact", exact_identifiers, min_rssi, observations, mode, evidence, alert_enabled))
     return tuple(result)
 
 
@@ -148,6 +152,4 @@ def match_signature(signature: Signature, advertisement: Advertisement) -> bool:
         checks.append(name == signature.name_pattern if signature.name_mode == "exact" else signature.name_pattern.casefold() in name.casefold())
     if signature.exact_identifiers:
         checks.append(advertisement.identifier.lower() in signature.exact_identifiers)
-    if signature.min_rssi is not None:
-        checks.append(advertisement.rssi is not None and advertisement.rssi >= signature.min_rssi)
     return bool(checks) and (all(checks) if signature.match_mode == "all" else any(checks))

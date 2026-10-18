@@ -14,6 +14,7 @@ class EventStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.retention_days = retention_days
         self.max_events = max_events
+        self._writes_since_prune = 0
         with self._connect() as db:
             db.execute("""CREATE TABLE IF NOT EXISTS detections (
                 event_id TEXT PRIMARY KEY, signature_id TEXT NOT NULL, signature_name TEXT NOT NULL,
@@ -37,6 +38,10 @@ class EventStore:
                 event.event_id, event.signature_id, event.signature_name, event.confidence.value,
                 event.observed_identifier, event.first_seen.isoformat(), event.last_seen.isoformat(),
                 event.strongest_rssi, event.observation_count))
+        self._writes_since_prune += 1
+        if self._writes_since_prune >= 100:
+            self.prune(datetime.now(timezone.utc))
+            self._writes_since_prune = 0
 
     def recent(self, limit: int = 100) -> list[DetectionEvent]:
         if limit < 0:

@@ -17,7 +17,8 @@ class CliTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             cfg = Path(directory) / "config.yaml"
             cfg.write_text((root / "config" / "detector.example.yaml").read_text(encoding="utf-8").replace(
-                "/var/lib/bt-signature-detector/events.sqlite3", str(Path(directory) / "events.sqlite3")), encoding="utf-8")
+                "/var/lib/bt-signature-detector/events.sqlite3", str(Path(directory) / "events.sqlite3")).replace(
+                "signature_file: signatures.example.yaml", f"signature_file: {root / 'config' / 'signatures.example.yaml'}"), encoding="utf-8")
             self.assertEqual(main(["scan", "--dry-run", "--config", str(cfg)]), 0)
 
     def test_sms_test_alert_requires_explicit_confirmation(self):

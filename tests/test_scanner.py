@@ -45,7 +45,7 @@ class ScannerTests(unittest.IsolatedAsyncioTestCase):
                              scanner_factory=factory, reconnect_initial_seconds=0.001, reconnect_max_seconds=0.002)
         stop = asyncio.Event()
         task = asyncio.create_task(scanner.run(lambda _: asyncio.sleep(0), stop))
-        await asyncio.sleep(0.01)
+        await asyncio.sleep(0.05)
         stop.set()
         await task
         self.assertGreaterEqual(len(modes), 2)

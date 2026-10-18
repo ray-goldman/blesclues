@@ -65,6 +65,12 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "cooldown_seconds"):
             validate_config_data(data)
 
+    def test_release_feed_requires_valid_https_url(self) -> None:
+        data = valid_config()
+        data["updates"] = {"enabled": True, "manifest_url": "http://updates.example.org/feed.json"}
+        with self.assertRaisesRegex(ValueError, "updates.manifest_url"):
+            validate_config_data(data)
+
 
 if __name__ == "__main__":
     unittest.main()

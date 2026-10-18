@@ -13,10 +13,11 @@ logger = logging.getLogger(__name__)
 class DetectionPipeline:
     def __init__(self, signatures: Sequence[Signature], *, store=None,
                  cooldown_seconds: int = 300, absence_seconds: int = 120,
-                 global_min_rssi: int | None = None, dispatcher=None) -> None:
+                 global_min_rssi: int | None = None, dispatcher=None, scan_cache=None) -> None:
         self.signatures = tuple(signatures)
         self.store = store
         self.dispatcher = dispatcher
+        self.scan_cache = scan_cache
         self.filter = DetectionFilter(cooldown_seconds=cooldown_seconds,
             absence_seconds=absence_seconds, global_min_rssi=global_min_rssi)
         self.advertisements_processed = 0
@@ -24,6 +25,10 @@ class DetectionPipeline:
 
     def process(self, advertisement: Advertisement) -> list[DetectionEvent]:
         self.advertisements_processed += 1
+        if self.scan_cache is not None:
+            try: self.scan_cache.add(advertisement)
+            except OSError:
+                logger.warning("runtime scan cache is unavailable", exc_info=True)
         matches = [signature for signature in self.signatures if match_signature(signature, advertisement)]
         events = self.filter.observe(advertisement, matches)
         for event in events:

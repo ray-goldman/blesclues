@@ -61,6 +61,17 @@ signatures:
 '''))[0]
         self.assertFalse(match_signature(signature, Advertisement("id")))
 
+    def test_rssi_is_not_used_as_signature_identity(self):
+        signature = load_signatures(self.write_signatures('''schema_version: 1
+signatures:
+  - id: rssi
+    label: RSSI is a filter only
+    match_mode: any
+    service_uuids: ["180d"]
+    min_rssi: -90
+'''))[0]
+        self.assertFalse(match_signature(signature, Advertisement("id", rssi=-40)))
+
     def test_invalid_or_empty_predicates_rejected(self):
         for body in (
             "  - id: empty\n    label: Empty\n",
