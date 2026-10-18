@@ -1,0 +1,13 @@
+[Unit]
+Description=Enable the Bluetooth controller for BLE scanning
+After=bluetooth.service
+Requires=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/sbin/rfkill unblock bluetooth
+ExecStart=/usr/bin/bluetoothctl power on
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

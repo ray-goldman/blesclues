@@ -5,12 +5,16 @@ Requires=bt-signature-detector-ap.service
 
 [Service]
 Type=simple
-ExecStart=/usr/sbin/dnsmasq --no-daemon --conf-file=/etc/bt-signature-detector/dnsmasq-ap.conf
+ExecStart=/usr/sbin/dnsmasq --no-daemon --conf-file=/etc/bt-signature-detector/dnsmasq-ap.conf --dhcp-leasefile=/run/bt-signature-detector-dhcp/dnsmasq.leases
 Restart=on-failure
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+RuntimeDirectory=bt-signature-detector-dhcp
+RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
+ReadWritePaths=/run/bt-signature-detector-dhcp
 
 [Install]
 WantedBy=multi-user.target

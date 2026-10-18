@@ -36,5 +36,21 @@ class InstallScriptTests(unittest.TestCase):
         for path in deployment_text:
             self.assertNotIn(b"\r", path.read_bytes(), path.name)
 
+    def test_dhcp_lease_file_is_writable_under_systemd_sandbox(self):
+        unit = (self.root / "systemd" / "bt-signature-detector-dhcp.service").read_text()
+        self.assertIn("RuntimeDirectory=bt-signature-detector-dhcp", unit)
+        self.assertIn("ReadWritePaths=/run/bt-signature-detector-dhcp", unit)
+        self.assertIn("--dhcp-leasefile=/run/bt-signature-detector-dhcp/dnsmasq.leases", unit)
+
+    def test_installer_enables_a_bluetooth_power_unit_before_scanning(self):
+        install = (self.root / "scripts" / "install.sh").read_text()
+        scanner = (self.root / "systemd" / "bt-signature-detector.service").read_text()
+        power = (self.root / "systemd" / "bt-signature-detector-bluetooth.service").read_text()
+        self.assertIn("rfkill", install)
+        self.assertIn("bt-signature-detector-bluetooth.service", install)
+        self.assertRegex(scanner, r"(?m)^Requires=.*bt-signature-detector-bluetooth\.service")
+        self.assertIn("rfkill unblock bluetooth", power)
+        self.assertIn("bluetoothctl power on", power)
+
 
 if __name__ == "__main__": unittest.main()

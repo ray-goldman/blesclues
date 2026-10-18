@@ -23,7 +23,7 @@ if [[ ! "$AP_COUNTRY" =~ ^[A-Za-z]{2}$ ]]; then
 fi
 
 apt-get update
-apt-get install -y python3-venv python3-dev libbluetooth-dev network-manager bluez dnsmasq-base sudo iw
+apt-get install -y python3-venv python3-dev libbluetooth-dev network-manager bluez dnsmasq-base sudo iw rfkill
 getent group bluetooth >/dev/null || groupadd --system bluetooth
 id -u "$SERVICE_USER" >/dev/null 2>&1 || useradd --system --home-dir "$STATE_DIR" --create-home --shell /usr/sbin/nologin --groups bluetooth "$SERVICE_USER"
 usermod -a -G bluetooth "$SERVICE_USER"
@@ -59,6 +59,7 @@ if [[ ! -e "$STATE_DIR/web/ui-password.hash" ]]; then
   chown bt-web:bt-detector "$STATE_DIR/web/ui-password.hash"
 fi
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector.service" /etc/systemd/system/bt-signature-detector.service
+install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-bluetooth.service" /etc/systemd/system/bt-signature-detector-bluetooth.service
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-dhcp.service" /etc/systemd/system/bt-signature-detector-dhcp.service
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-ap.service" /etc/systemd/system/bt-signature-detector-ap.service
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-updater@.service" /etc/systemd/system/bt-signature-detector-updater@.service
@@ -89,6 +90,7 @@ chmod 0640 /etc/bt-signature-detector/dnsmasq-ap.conf
 chown root:bt-detector /etc/bt-signature-detector/dnsmasq-ap.conf
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-web.service" /etc/systemd/system/bt-signature-detector-web.service
 systemctl daemon-reload
+systemctl enable --now bt-signature-detector-bluetooth.service
 systemctl enable --now bt-signature-detector-ap.service
 systemctl enable --now bt-signature-detector-dhcp.service
 systemctl enable --now bt-signature-detector.service

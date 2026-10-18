@@ -1,7 +1,7 @@
 [Unit]
 Description=Bluetooth Signature Detector scanner
-After=bluetooth.service
-Wants=bluetooth.service
+After=bluetooth.service bt-signature-detector-bluetooth.service
+Requires=bluetooth.service bt-signature-detector-bluetooth.service
 
 [Service]
 Type=simple
