@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bt-signature-detector"
+version = "0.1.0"
+description = "Headless BLE advertisement signature detector for Raspberry Pi"
+requires-python = ">=3.11"
+dependencies = [
+    "PyYAML>=6.0",
+    "bleak>=3.0.0",
+    "Flask>=3.0",
+    "waitress>=3.0",
+    "cryptography>=43.0",
+]
+
+[project.optional-dependencies]
+sms = ["twilio>=9.0"]
+dev = []
+
+[project.scripts]
+detector = "bt_signature_detector.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+bt_signature_detector = ["web_templates/*.html", "web_static/*.js", "web_static/*.css"]

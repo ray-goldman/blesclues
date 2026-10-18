@@ -1,0 +1,32 @@
+schema_version: 1
+bluetooth:
+  scan_mode: passive
+  # Replace this synthetic AD-pattern filter for the adapter and advertisements in use.
+  # Passive BlueZ scanning requires at least one pattern and never falls back to active.
+  or_patterns:
+    - start_position: 0
+      ad_data_type: 255
+      pattern: "010203"
+detection:
+  signature_file: config/signatures.example.yaml
+  min_observations: 3
+  cooldown_seconds: 300
+storage:
+  path: /var/lib/bt-signature-detector/events.sqlite3
+notifications:
+  audio:
+    enabled: false
+  ntfy:
+    enabled: false
+  sms:
+    enabled: false
+access_point:
+  enabled: true
+  ssid: BLE-Detector
+  passphrase: easypassword
+web:
+  enabled: true
+  port: 8080
+updates:
+  enabled: true
+  manifest_url: null
