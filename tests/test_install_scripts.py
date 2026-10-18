@@ -7,8 +7,10 @@ class InstallScriptTests(unittest.TestCase):
 
     def test_service_waits_for_bluetooth_without_waiting_for_network(self):
         unit = (self.root / "systemd" / "bt-signature-detector.service").read_text()
+        web_unit = (self.root / "systemd" / "bt-signature-detector-web.service").read_text()
         self.assertIn("After=bluetooth.service", unit)
         self.assertNotIn("network-online.target", unit)
+        self.assertNotIn("RuntimeDirectoryGroup", unit + web_unit)
         self.assertIn("Restart=on-failure", unit)
         self.assertIn("StandardOutput=journal", unit)
 
@@ -22,11 +24,16 @@ class InstallScriptTests(unittest.TestCase):
         self.assertIn("dnsmasq-ap.conf", install)
         self.assertIn("if [[ ! -e /etc/bt-signature-detector/dnsmasq-ap.conf ]]", install)
 
-    def test_shell_scripts_are_kept_as_lf_for_bash_on_linux(self):
+    def test_linux_deployment_text_is_kept_as_lf_in_archives(self):
         attributes = (self.root / ".gitattributes").read_text()
-        self.assertIn("*.sh text eol=lf", attributes)
-        for script in (self.root / "scripts").glob("*.sh"):
-            self.assertNotIn(b"\r", script.read_bytes(), script.name)
+        self.assertIn("* text=auto eol=lf", attributes)
+        deployment_text = [
+            *self.root.joinpath("scripts").glob("*.sh"),
+            *self.root.joinpath("systemd").glob("*.service"),
+            *self.root.joinpath("systemd").glob("*.sudoers"),
+        ]
+        for path in deployment_text:
+            self.assertNotIn(b"\r", path.read_bytes(), path.name)
 
 
 if __name__ == "__main__": unittest.main()

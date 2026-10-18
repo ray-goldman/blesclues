@@ -19,7 +19,6 @@ ProtectHome=true
 PrivateTmp=true
 RuntimeDirectory=bt-signature-detector
 RuntimeDirectoryMode=0770
-RuntimeDirectoryGroup=bt-detector
 RuntimeDirectoryPreserve=yes
 ReadWritePaths=/var/lib/bt-signature-detector /etc/bt-signature-detector
 StandardOutput=journal
