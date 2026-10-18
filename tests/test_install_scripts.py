@@ -52,5 +52,14 @@ class InstallScriptTests(unittest.TestCase):
         self.assertIn("rfkill unblock bluetooth", power)
         self.assertIn("bluetoothctl power on", power)
 
+    def test_installer_enables_bluez_experimental_api_for_passive_scanning(self):
+        install = (self.root / "scripts" / "install.sh").read_text()
+        override = (self.root / "systemd" / "bluetooth.service.d" / "10-bt-signature-detector.conf").read_text()
+        uninstall = (self.root / "scripts" / "uninstall.sh").read_text()
+        self.assertIn("bluetooth.service.d", install)
+        self.assertIn("bluetooth.service", install)
+        self.assertIn("--experimental", override)
+        self.assertIn("10-bt-signature-detector.conf", uninstall)
+
 
 if __name__ == "__main__": unittest.main()

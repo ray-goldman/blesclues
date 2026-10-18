@@ -63,6 +63,8 @@ install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-bluetooth.service" /etc
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-dhcp.service" /etc/systemd/system/bt-signature-detector-dhcp.service
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-ap.service" /etc/systemd/system/bt-signature-detector-ap.service
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-updater@.service" /etc/systemd/system/bt-signature-detector-updater@.service
+install -d -m 0755 /etc/systemd/system/bluetooth.service.d
+install -m 0644 "$ROOT_DIR/systemd/bluetooth.service.d/10-bt-signature-detector.conf" /etc/systemd/system/bluetooth.service.d/10-bt-signature-detector.conf
 install -m 0755 "$ROOT_DIR/scripts/apply_update_helper.sh" /usr/local/sbin/bt-detector-apply-update
 install -m 0755 "$ROOT_DIR/scripts/restart_detector_helper.sh" /usr/local/sbin/bt-detector-restart-scanner
 install -m 0440 "$ROOT_DIR/systemd/bt-signature-detector-ap-helper.sudoers" /etc/sudoers.d/bt-signature-detector-ap
@@ -90,6 +92,7 @@ chmod 0640 /etc/bt-signature-detector/dnsmasq-ap.conf
 chown root:bt-detector /etc/bt-signature-detector/dnsmasq-ap.conf
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-web.service" /etc/systemd/system/bt-signature-detector-web.service
 systemctl daemon-reload
+systemctl restart bluetooth.service
 systemctl enable --now bt-signature-detector-bluetooth.service
 systemctl enable --now bt-signature-detector-ap.service
 systemctl enable --now bt-signature-detector-dhcp.service
