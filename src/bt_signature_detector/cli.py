@@ -12,6 +12,10 @@ from .scanner import BleScanner
 from .signatures import load_signatures
 from .store import EventStore
 from .synthetic import run_synthetic
+from .notifications.audio import AudioNotifier
+from .notifications.dispatcher import NotificationDispatcher
+from .notifications.ntfy import NtfyNotifier
+from .notifications.sms import SmsNotifier
 
 
 def _parser():
@@ -21,6 +25,7 @@ def _parser():
         command = commands.add_parser(name)
         command.add_argument("--config", type=Path, default=Path("config/detector.yaml"))
         if name == "scan": command.add_argument("--dry-run", action="store_true")
+        if name == "test-alert": command.add_argument("--confirm-sms", action="store_true")
         if name == "list-signatures": command.add_argument("--signatures", type=Path)
         if name == "recent": command.add_argument("--limit", type=int, default=20)
     return parser
@@ -46,19 +51,53 @@ def main(argv=None):
         if args.command == "status":
             print(f"signatures={len(signatures)} events={len(store.recent(10000))} scan_mode={config.bluetooth.scan_mode}")
             return 0
+        notifiers = []
+        if config.notifications.audio.enabled:
+            if config.notifications.audio.sound_path is None:
+                raise ValueError("notifications.audio.sound_path is required when audio is enabled")
+            notifiers.append(AudioNotifier(config.notifications.audio.sound_path, config.notifications.audio.player))
+        if config.notifications.ntfy.enabled:
+            ntfy = config.notifications.ntfy
+            auth_provider = None
+            if ntfy.token_env:
+                import os
+                auth_provider = lambda: os.environ.get(ntfy.token_env)
+            elif ntfy.username_env and ntfy.password_env:
+                import os
+                auth_provider = lambda: (os.environ.get(ntfy.username_env, ""), os.environ.get(ntfy.password_env, ""))
+            notifiers.append(NtfyNotifier(ntfy.server_url, ntfy.topic, ntfy.priority, ntfy.timeout_seconds, auth_provider))
+        if config.notifications.sms.enabled:
+            sms = config.notifications.sms
+            notifiers.append(SmsNotifier.from_environment(sms.destination,
+                cooldown_seconds=sms.cooldown_seconds, account_sid_env=sms.account_sid_env,
+                auth_token_env=sms.auth_token_env, from_number_env=sms.from_number_env))
         if args.command == "test-alert":
-            print("Test alert requested (notification backend initializes with service runtime).")
+            if config.notifications.sms.enabled and not args.confirm_sms:
+                raise ValueError("SMS test requires --confirm-sms")
+            if not notifiers:
+                raise ValueError("no notification backend is enabled")
+            async def dispatch_tests():
+                for notifier in notifiers:
+                    await notifier.test()
+            asyncio.run(dispatch_tests())
+            print("Test notification sent to enabled backends")
             return 0
+        dispatcher = NotificationDispatcher(notifiers, queue_size=config.notifications.queue_size,
+                                            timeout_seconds=config.notifications.timeout_seconds)
         pipeline = DetectionPipeline(signatures, store=store,
             cooldown_seconds=config.detection.cooldown_seconds,
             absence_seconds=config.detection.absence_seconds,
-            global_min_rssi=config.detection.global_min_rssi)
-        stop = asyncio.Event()
+            global_min_rssi=config.detection.global_min_rssi, dispatcher=dispatcher)
         async def run():
-            if args.dry_run:
-                await run_synthetic(pipeline.process, stop)
-            else:
-                await BleScanner(config.bluetooth).run(pipeline.process, stop)
+            await dispatcher.start()
+            stop = asyncio.Event()
+            try:
+                if args.dry_run:
+                    await run_synthetic(pipeline.process, stop)
+                else:
+                    await BleScanner(config.bluetooth).run(pipeline.process, stop)
+            finally:
+                await dispatcher.close()
         asyncio.run(run())
         print(f"advertisements_processed={pipeline.advertisements_processed} store_errors={pipeline.store_errors}")
         return 0

@@ -49,7 +49,7 @@ class DetectionFilter:
             state.last_alert = now
             events.append(DetectionEvent(signature.signature_id, signature.name, signature.confidence,
                 advertisement.identifier, state.first_seen, advertisement.timestamp,
-                state.strongest_rssi, state.count))
+                state.strongest_rssi, state.count, alert_enabled=signature.alert_enabled))
         return events
 
     def expire(self, now: datetime) -> int:

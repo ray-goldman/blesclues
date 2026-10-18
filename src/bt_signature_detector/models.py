@@ -73,4 +73,5 @@ class DetectionEvent:
     strongest_rssi: int | None
     observation_count: int
     event_id: str = field(default_factory=lambda: str(uuid4()))
+    alert_enabled: bool = False
 

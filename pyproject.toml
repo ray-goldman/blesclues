@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-sms = ["twilio>=9.0"]
+sms = ["twilio>=9.0,<10"]
 dev = []
 
 [project.scripts]

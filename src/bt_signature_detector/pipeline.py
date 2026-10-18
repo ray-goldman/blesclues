@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)
 class DetectionPipeline:
     def __init__(self, signatures: Sequence[Signature], *, store=None,
                  cooldown_seconds: int = 300, absence_seconds: int = 120,
-                 global_min_rssi: int | None = None) -> None:
+                 global_min_rssi: int | None = None, dispatcher=None) -> None:
         self.signatures = tuple(signatures)
         self.store = store
+        self.dispatcher = dispatcher
         self.filter = DetectionFilter(cooldown_seconds=cooldown_seconds,
             absence_seconds=absence_seconds, global_min_rssi=global_min_rssi)
         self.advertisements_processed = 0
@@ -33,4 +34,6 @@ class DetectionPipeline:
                 except Exception:
                     self.store_errors += 1
                     logger.exception("unable to store detection; observation continues")
+            if self.dispatcher is not None:
+                self.dispatcher.submit(event)
         return events
