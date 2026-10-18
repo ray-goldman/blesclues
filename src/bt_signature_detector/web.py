@@ -300,8 +300,12 @@ def create_app(services: WebServices) -> Flask:
     return app
 
 
-def main():
+def _serve_dashboard(app: Flask, port: int) -> None:
     from waitress import serve
+    serve(app, host="0.0.0.0", port=port)
+
+
+def main():
     from .config import load_app_config
     from .store import EventStore
     from .access_point import AccessPointClient
@@ -337,8 +341,7 @@ def main():
             max_bytes=config.updates.max_bundle_bytes, timeout=config.updates.timeout_seconds)
             if config.updates.enabled else None,
         max_update_bytes=config.updates.max_bundle_bytes, restart_scanner=restart_scanner)
-    host = config.access_point.interface_address.split("/")[0]
-    serve(create_app(services), host=host, port=config.web.port)
+    _serve_dashboard(create_app(services), config.web.port)
 
 
 if __name__ == "__main__": main()

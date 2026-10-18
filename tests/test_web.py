@@ -1,8 +1,9 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from bt_signature_detector.web import WebServices, create_app
+from bt_signature_detector.web import WebServices, _serve_dashboard, create_app
 
 
 class WebTests(unittest.TestCase):
@@ -17,6 +18,12 @@ class WebTests(unittest.TestCase):
 
     def csrf(self):
         with self.client.session_transaction() as session: return session["csrf_token"]
+
+    def test_dashboard_binds_to_all_interfaces_for_wired_and_hotspot_access(self):
+        app = object()
+        with patch("waitress.serve") as serve:
+            _serve_dashboard(app, 8080)
+        serve.assert_called_once_with(app, host="0.0.0.0", port=8080)
 
     def login(self):
         self.client.post("/setup", data={"password": "a-good-password"})

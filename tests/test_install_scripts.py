@@ -63,5 +63,9 @@ class InstallScriptTests(unittest.TestCase):
         self.assertIn("--experimental", override)
         self.assertIn("10-bt-signature-detector.conf", uninstall)
 
+    def test_installer_restarts_web_interface_after_updating_it(self):
+        install = (self.root / "scripts" / "install.sh").read_text()
+        self.assertIn("systemctl restart bt-signature-detector-web.service", install)
+
 
 if __name__ == "__main__": unittest.main()

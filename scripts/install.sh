@@ -100,4 +100,5 @@ systemctl enable --now bt-signature-detector-dhcp.service
 systemctl enable --now bt-signature-detector.service
 systemctl restart bt-signature-detector.service
 systemctl enable --now bt-signature-detector-web.service
+systemctl restart bt-signature-detector-web.service
 echo "Installed. Configure a device-specific passive bluetooth.or_patterns before expecting detections."
