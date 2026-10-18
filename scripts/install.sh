@@ -94,8 +94,10 @@ install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-web.service" /etc/syste
 systemctl daemon-reload
 systemctl restart bluetooth.service
 systemctl enable --now bt-signature-detector-bluetooth.service
+systemctl restart bt-signature-detector-bluetooth.service
 systemctl enable --now bt-signature-detector-ap.service
 systemctl enable --now bt-signature-detector-dhcp.service
 systemctl enable --now bt-signature-detector.service
+systemctl restart bt-signature-detector.service
 systemctl enable --now bt-signature-detector-web.service
 echo "Installed. Configure a device-specific passive bluetooth.or_patterns before expecting detections."

@@ -58,6 +58,8 @@ class InstallScriptTests(unittest.TestCase):
         uninstall = (self.root / "scripts" / "uninstall.sh").read_text()
         self.assertIn("bluetooth.service.d", install)
         self.assertIn("bluetooth.service", install)
+        self.assertIn("systemctl restart bt-signature-detector-bluetooth.service", install)
+        self.assertIn("systemctl restart bt-signature-detector.service", install)
         self.assertIn("--experimental", override)
         self.assertIn("10-bt-signature-detector.conf", uninstall)
 
