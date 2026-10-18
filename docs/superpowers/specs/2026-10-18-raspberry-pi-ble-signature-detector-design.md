@@ -13,11 +13,13 @@ This is a passive signal matching tool, not an identity or attribution system. B
 
 ## Scope and delivery sequence
 
-The implementation is split into three independently reviewable increments:
+The implementation is split into five independently reviewable increments:
 
 1. **Detection core:** package structure, data models, YAML configuration and signature parsing, BLE scanner adapter, signature evaluation, stateful observation/cooldown filtering, SQLite detection-event storage and retention, CLI, structured logging, synthetic source and dry run, and unit tests.
 2. **Notification backends:** common backend contract, offline local audio, ntfy over HTTP, optional Twilio SMS behind a provider abstraction, rate limits, failure isolation, test-alert command, and mocked delivery tests.
 3. **Raspberry Pi operation:** systemd unit, install/uninstall scripts, dependency setup, Raspberry Pi 3 installation, Bluetooth/passive-scan troubleshooting, secure secret setup, limitations, and CarPlay/Siri test guide.
+4. **Local access point and web UI:** a boot-persistent Pi Wi-Fi access point, separate web UI password setup, responsive configuration/status/scan pages, authenticated config updates, and AP/UI setup documentation.
+5. **Software updates:** authenticated HTTPS release checks and signed package uploads, staged installation, health verification, and automatic rollback on failed startup.
 
 The interfaces are defined up front so each increment integrates without changing the scanner or detection rules when another backend is added.
 
@@ -32,6 +34,10 @@ src/bt_signature_detector/
   config.py              # config loading, defaults, validation
   models.py              # Advertisement, Signature, Match, DetectionEvent
   scanner.py             # Bleak adapter and reconnect loop
+  access_point.py        # NetworkManager AP status and restricted settings helper client
+  ap_helper.py           # narrow privileged AP-profile update service
+  web.py                 # authenticated local web UI and JSON endpoints
+  updates.py             # manifest/package verification and update lifecycle
   signatures.py          # YAML loading and deterministic rule evaluation
   state.py               # per-observation tracking, thresholds, cooldowns
   store.py               # SQLite schema, event writes, retention, recent query
@@ -47,6 +53,12 @@ config/
   detector.example.yaml
   signatures.example.yaml
 systemd/bt-signature-detector.service
+systemd/bt-signature-detector-web.service
+systemd/bt-signature-detector-updater.service
+systemd/bt-signature-detector-ap-helper.service
+web/templates/index.html
+web/static/app.js
+web/static/style.css
 scripts/install.sh
 scripts/uninstall.sh
 tests/
@@ -57,9 +69,10 @@ tests/
   test_pipeline.py
   test_notifications.py
   test_cli.py
+  test_updates.py
 ```
 
-Use Python's `argparse`, `asyncio`, `sqlite3`, `logging`, and `unittest` from the standard library. Runtime dependencies are PyYAML and Bleak. Audio uses the Raspberry Pi OS `aplay` executable when enabled. Twilio support is an optional dependency, imported only when that provider is enabled. Avoid a web server, external database, Docker, or a required online service.
+Use Python's `argparse`, `asyncio`, `sqlite3`, `logging`, and `unittest` from the standard library. Runtime dependencies are PyYAML, Bleak, Flask, Waitress, and `cryptography` for Ed25519 verification. Audio uses the Raspberry Pi OS `aplay` executable when enabled. Twilio support is an optional dependency, imported only when that provider is enabled. The web server is local-only and serves the configuration UI; no external database, Docker, or online service is required.
 
 ## Component contracts and data flow
 
@@ -73,7 +86,7 @@ Use Python's `argparse`, `asyncio`, `sqlite3`, `logging`, and `unittest` from th
 
 ### Scanner
 
-The scanner exposes an async stream or callback of `Advertisement` values and owns no signature, persistence, or notification logic. It accepts an adapter selector and explicit scan options. Passive mode is requested when configured; if Bleak/BlueZ/hardware cannot honor it, the scanner logs and surfaces a clear error/status. It must never silently fall back to active scanning. Advertisement callbacks do minimal work and hand observations to the pipeline.
+The scanner exposes an async stream or callback of `Advertisement` values and owns no signature, persistence, or notification logic. It accepts an adapter selector and explicit scan options. Passive mode is requested when configured; if Bleak/BlueZ/hardware cannot honor it, the scanner logs and surfaces a clear error/status. It must never silently fall back to active scanning. With Bleak's BlueZ backend, passive mode requires BlueZ `or_patterns`; service UUID filtering is not implemented for passive scans. Config validation therefore requires explicit `or_patterns` for passive mode and explains that they limit what can be observed. An operator can explicitly select active mode in config if broad discovery is needed and local policy permits it. Advertisement callbacks do minimal work and hand observations to the pipeline.
 
 On adapter errors or disappearance, scanner startup is retried with capped exponential backoff. Cancellation and shutdown stop the scanner cleanly. Scan errors do not terminate the service permanently. Debug logging can include advertisement field details; normal logs avoid dumping complete identifiers or manufacturer payloads.
 
@@ -105,9 +118,25 @@ Each backend implements an async `send(event)` operation and a `test()` operatio
 
 Notification text is configurable. A synthetic example is: “Bluetooth detector: Example signature observed. Strong signal.”
 
+### Wi-Fi access point and local web UI
+
+The installer targets Raspberry Pi OS Bookworm or later and uses its default NetworkManager service to create a persistent 2.4 GHz access point on the built-in Wi-Fi adapter. Default SSID is `BLE-Detector`; the requested default WPA2 passphrase is `easypassword`. The interface address is `192.168.4.1`, with local DHCP, and the UI is reached at `http://192.168.4.1/`. The AP is local-only by default: it does not bridge clients to another network or provide internet. An optional uplink for ntfy/SMS can use Ethernet or a second Wi-Fi adapter; the single built-in radio is not assumed to maintain AP and client connections simultaneously. The Wi-Fi regulatory country must be configured before the AP starts. Raspberry Pi documentation confirms that Raspberry Pi 3 can host an AP and that Bookworm uses NetworkManager by default.
+
+The web service binds only to the AP interface, not all interfaces. A first-visit setup flow requires the user to create a separate UI password before accessing any status or configuration page. Passwords are stored as a salted password hash, sessions use a locally generated secret, cookies are HttpOnly and SameSite, and state-changing requests require CSRF protection. The UI warns prominently that `easypassword` is a weak default and provides a way to change the AP SSID/passphrase. The UI password can also be changed. Secrets and passwords are never rendered back in the page or returned by configuration APIs.
+
+The dashboard shows scanner status/counters, recent detection events, recent errors, and a bounded in-memory live advertisement list (with identifiers redacted by default and no durable storage of ordinary discoveries). It refreshes through small same-origin JSON requests and does not require a cloud service. Configuration forms expose only documented, whitelisted detector and AP settings; submissions are validated before an atomic config write and reported as applied or requiring restart. The UI cannot run shell commands or edit arbitrary files. A narrow privileged helper applies changes to the single NetworkManager AP profile; the main scanner/web process remains unprivileged. The helper accepts only validated AP SSID, passphrase, channel, and country fields.
+
+### Software updates
+
+The web UI supports two update paths that use the same verification and installation pipeline: (1) check a configurable HTTPS release manifest and download its release artifact when an Ethernet/internet uplink is available, and (2) upload a release bundle from a connected client on the local AP. The manifest URL is configurable; the trusted Ed25519 public key is installed as a root-owned trust anchor and cannot be changed through the web UI. The matching private signing key is never stored on the Pi or in the repository. Each release bundle contains a versioned application wheel and metadata. Both the manifest and bundle must verify against the trusted signing key, and the artifact hash must match before staging. Upload size is bounded; archive paths, file types, and metadata are validated to prevent path traversal or arbitrary file installation.
+
+The update page shows the installed version, available version, release notes, last check result, and staged/apply state. The user explicitly initiates checks and confirms installation; there is no automatic download or install by default. The update service uses isolated version directories/virtual environments, runs a health check before switching the active version, restarts the application, and rolls back to the previous version if startup health checks fail. Config, secrets, and SQLite event data remain in a separate state directory and are never overwritten by an update. The web process remains unprivileged; a small dedicated updater service performs only the validated update operations through a restricted local IPC interface. It does not run arbitrary uploaded scripts or shell commands. Updates require internet only for the HTTPS feed; local uploads can be verified and applied without internet.
+
+The AP is provisioned at install/boot independent of internet connectivity. The web listener waits for the AP interface and retries binding if it is temporarily unavailable. The access-point manager and web UI are separate from BLE scanning, so a failed AP or web server does not stop the scanner. If AP setup fails, the services report status through journald and the CLI. The web UI is intended for direct access from a trusted client on the local AP; it is not exposed on an uplink network.
+
 ## Configuration and CLI
 
-A YAML config file provides adapter, scan mode, reconnect bounds, RSSI and observation thresholds, cooldown, absence reset, signature path, SQLite path/retention, log level/debug behavior, dispatcher queue and timeout, and backend settings. Defaults are safe: no notifications enabled, passive scan requested, minimum three observations, 300-second cooldown, no network dependency to start scanning. `validate-config` performs structural and cross-field validation without opening Bluetooth or sending messages.
+A YAML config file provides adapter, scan mode and required BlueZ passive `or_patterns`, reconnect bounds, RSSI and observation thresholds, cooldown, absence reset, signature path, SQLite path/retention, log level/debug behavior, dispatcher queue and timeout, backend settings, AP/UI settings, and update manifest URL. The trusted public key is installed separately as a root-owned trust anchor and cannot be changed through the UI. Defaults are no notifications enabled, passive scan requested (and validation fails clearly until patterns are configured), minimum three observations, 300-second cooldown, local AP with the specified default credentials, updates enabled but manual-only, and no internet dependency to start scanning. `validate-config` performs structural and cross-field validation without opening Bluetooth, changing NetworkManager, or sending messages.
 
 Commands:
 
@@ -117,21 +146,29 @@ Commands:
 - `detector status [--config PATH]`
 - `detector recent [--config PATH] [--limit N]`
 - `detector validate-config [--config PATH]`
+- `detector web-status [--config PATH]`
 
 Dry run injects deterministic synthetic advertisements through the same rule, state, storage, and notification interfaces. It must not require a Bluetooth adapter and must visibly identify itself as simulation. Test alert sends a sample event only to enabled configured backends; for SMS it should require an explicit CLI confirmation flag to prevent accidental charges.
 
-Status reports process/scanner state and counters (observations, matches, emitted events, cooldown suppressions, persistence failures, notification failures, reconnects) without dumping discovered-device inventories.
+Status reports process/scanner/AP/web state and counters (observations, matches, emitted events, cooldown suppressions, persistence failures, notification failures, reconnects) without dumping discovered-device inventories. The web UI configuration page edits a whitelist of validated settings; invalid values are rejected without changing the active configuration.
+
+The update page offers `Check for updates`, `Upload signed release`, and an explicit `Install staged update` action. It reports offline/no-uplink state without delaying or stopping BLE scanning. The UI never treats a successful HTTPS download as proof of trust: signature and hash verification are mandatory for both delivery paths.
 
 ## Startup and operations
 
-The systemd unit runs as a dedicated unprivileged account, starts after and waits for `bluetooth.service`, and does not require network-online. It restarts on unexpected failures, sends stdout/stderr to journald, and uses systemd's stop signal for graceful async shutdown. Installation creates a virtual environment, installs the package/dependencies, installs configuration examples without overwriting user config, creates service user/state directories, and enables the service. Bluetooth group/D-Bus access is checked and documented rather than assumed. Uninstall stops/disables the service and removes installed files only when explicitly requested by the script; it preserves configuration and event data by default.
+Separate systemd units run the scanner, web UI, AP helper, and updater with least privilege; scanner/UI start after and wait for `bluetooth.service` and NetworkManager but do not require network-online. The scanner restarts on unexpected failures, sends stdout/stderr to journald, and uses systemd's stop signal for graceful async shutdown. Installation creates versioned application environments, installs the package/dependencies, installs configuration examples without overwriting user config, creates service user/state directories, configures a persistent NetworkManager hotspot with DHCP on `wlan0`, provisions the restricted AP-settings helper, configures the updater trust key, and enables the services. It prompts for or validates the Wi-Fi regulatory country. Bluetooth group/D-Bus access is checked and documented rather than assumed. Uninstall stops/disables the services and removes installed files only when explicitly requested by the script; it preserves configuration, event data, and NetworkManager AP profile by default.
 
 ## Testing and acceptance mapping
 
-Use `unittest` and injected scanner/notifier interfaces so the default suite runs without BLE hardware, network, audio output, or Twilio credentials. Cover YAML validation; missing fields; masked manufacturer patterns; all/any rules; UUID/name matching; randomized identifiers remaining separate; global and per-signature RSSI thresholds; the three-observation floor; strongest RSSI and timestamps; cooldown suppression and expiry; absence reset; SQLite retention/recent query; exactly one logical event; dispatcher failure isolation and bounded queue behavior; SMS disabled/secret handling; adapter restart backoff with a fake scanner; dry-run full pipeline; and CLI validation.
+Use `unittest` and injected scanner/notifier/AP/update interfaces so the default suite runs without BLE hardware, a real AP, network, audio output, or Twilio credentials. Cover YAML validation including passive filters; missing fields; masked manufacturer patterns; all/any rules; UUID/name matching; randomized identifiers remaining separate; global and per-signature RSSI thresholds; the three-observation floor; strongest RSSI and timestamps; cooldown suppression and expiry; absence reset; SQLite retention/recent query; exactly one logical event; dispatcher failure isolation and bounded queue behavior; SMS disabled/secret handling; adapter restart backoff with a fake scanner; dry-run full pipeline; authentication setup/login/password change; unauthenticated UI/API rejection; CSRF checks; config validation/atomic updates; bounded/redacted live scan feed; AP helper whitelist; manifest and bundle signature verification; bad hash/signature rejection; upload size/path traversal rejection; version staging; health-check rollback; config/database preservation; and CLI validation.
 
-The release is acceptable when a Pi 3 can start scanning through systemd without network, adapter outages recover, synthetic confirmed matches produce one event and one dispatch during cooldown, audio works offline when configured, ntfy/SMS failures do not stop scanning, and the hardware-free unit suite passes. Deployment-specific passive scanning availability must be verified on the target Pi/BlueZ stack and documented accurately.
+The release is acceptable when a Pi 3 starts its local AP and authenticated web UI automatically after power-on, starts scanning without an internet connection, recovers from adapter outages, produces one event and one dispatch for synthetic confirmed matches during cooldown, supports safe web config changes, verifies and applies signed updates from either a release feed or uploaded bundle with rollback on failure, audio works offline when configured, ntfy/SMS failures do not stop scanning, and the hardware-free unit suite passes. Deployment-specific passive scanning availability and required BlueZ patterns must be documented accurately.
 
 ## Security, privacy, and identification limitations
 
-The package does not include real-world law-enforcement signature data. User-supplied signature definitions must carry provenance in their evidence field and be reviewed independently. Generic manufacturer or name evidence cannot establish equipment identity. Bluetooth address randomization prevents durable identity tracking; the program intentionally does not correlate rotating identifiers. Remote notifications exclude full observed identifiers by default. Credentials belong in environment variables or a restricted local secrets file. Discovery events are not retained as an indefinite inventory; only filtered detection events are stored under retention limits.
+The package does not include real-world law-enforcement signature data. User-supplied signature definitions must carry provenance in their evidence field and be reviewed independently. Generic manufacturer or name evidence cannot establish equipment identity. Bluetooth address randomization prevents durable identity tracking; the program intentionally does not correlate rotating identifiers. Remote notifications exclude full observed identifiers by default. Credentials belong in environment variables or a restricted local secrets file. Discovery events are not retained as an indefinite inventory; only filtered detection events are stored under retention limits. The AP default is intentionally easy to remember but weak; users should change it before relying on the device around untrusted people. A separate UI password is mandatory, but the local HTTP interface does not provide transport encryption and should only be used on the detector's trusted AP. Update integrity depends on protecting the signing private key and configuring the correct trusted public key; never accept unsigned bundles or disable verification for convenience.
+
+## Reference documentation
+
+- Raspberry Pi OS networking and hotspot setup: <https://www.raspberrypi.com/documentation/computers/configuration.html>
+- Bleak BlueZ scanner passive-mode requirements: <https://bleak.readthedocs.io/en/latest/_modules/bleak/backends/bluezdbus/scanner.html>
