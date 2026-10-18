@@ -23,6 +23,7 @@ class InstallScriptTests(unittest.TestCase):
         self.assertIn("/var/lib/bt-signature-detector", uninstall)
         self.assertIn("dnsmasq-ap.conf", install)
         self.assertIn("if [[ ! -e /etc/bt-signature-detector/dnsmasq-ap.conf ]]", install)
+        self.assertIn("802-11-wireless-security.pmf 1", install)
 
     def test_linux_deployment_text_is_kept_as_lf_in_archives(self):
         attributes = (self.root / ".gitattributes").read_text()

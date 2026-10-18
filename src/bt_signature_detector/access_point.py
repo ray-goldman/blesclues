@@ -49,6 +49,7 @@ class AccessPointClient:
             if commands:
                 self.runner(["nmcli", "connection", "modify", profile, *commands], check=True, capture_output=True, text=True)
             if commands or country:
+                self.runner(["nmcli", "radio", "wifi", "on"], check=True, capture_output=True, text=True)
                 self.runner(["nmcli", "connection", "up", profile], check=True, capture_output=True, text=True)
         except subprocess.SubprocessError:
             raise RuntimeError("NetworkManager rejected the access point update") from None
@@ -56,6 +57,7 @@ class AccessPointClient:
     def activate(self, country: str) -> None:
         if not isinstance(country, str) or len(country) != 2 or not country.isalpha():
             raise ValueError("a two-letter regulatory country code is required")
+        self.runner(["nmcli", "radio", "wifi", "on"], check=True, capture_output=True, text=True)
         self.runner(["iw", "reg", "set", country.upper()], check=True, capture_output=True, text=True)
         self.runner(["nmcli", "connection", "up", self.PROFILE], check=True, capture_output=True, text=True)
 

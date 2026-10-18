@@ -24,6 +24,16 @@ class ApHelperTests(unittest.TestCase):
         def fail(*args, **kwargs): raise OSError("nmcli missing")
         self.assertIn("nmcli missing", AccessPointClient(runner=fail).read().error)
 
+    def test_activate_enables_wifi_then_sets_country_and_starts_profile(self):
+        calls = []
+        client = AccessPointClient(runner=lambda command, **kwargs: calls.append(command))
+        client.activate("US")
+        self.assertEqual(calls, [
+            ["nmcli", "radio", "wifi", "on"],
+            ["iw", "reg", "set", "US"],
+            ["nmcli", "connection", "up", "BLE-Detector"],
+        ])
+
     def test_nmcli_error_does_not_echo_wifi_passphrase(self):
         def fail(command, **kwargs): raise subprocess.CalledProcessError(1, command)
         with self.assertRaises(RuntimeError) as error:

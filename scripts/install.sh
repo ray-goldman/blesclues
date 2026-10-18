@@ -71,9 +71,11 @@ if ! nmcli -t -f NAME connection show | grep -Fxq BLE-Detector; then
     802-11-wireless.mode ap 802-11-wireless.band bg 802-11-wireless.channel 6 \
     802-11-wireless-security.key-mgmt wpa-psk 802-11-wireless-security.proto rsn \
     802-11-wireless-security.pairwise ccmp 802-11-wireless-security.group ccmp \
+    802-11-wireless-security.pmf 1 \
     802-11-wireless-security.psk easypassword \
     ipv4.method manual ipv4.addresses 192.168.4.1/24 ipv4.never-default yes ipv6.method disabled
 fi
+nmcli connection modify BLE-Detector 802-11-wireless-security.pmf 1
 if [[ ! -e /etc/bt-signature-detector/dnsmasq-ap.conf ]]; then
 cat > /etc/bt-signature-detector/dnsmasq-ap.conf <<'EOF'
 interface=wlan0
