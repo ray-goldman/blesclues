@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Give operators a way to turn an observed BLE device into a reusable watch rule, organize rules into named lists, and review later matches. Move the raw, short-lived advertisement window off the Monitor page and onto its own page.
+Give operators a way to turn an observed BLE device into a reusable watch rule, organize rules into named lists, and review later matches. Show the Bluetooth SIG assigned company name for manufacturer company identifiers when available. Move the raw, short-lived advertisement window off the Monitor page and onto its own page.
 
 The design must preserve BLE's Clues' passive-by-default behavior and avoid writing ordinary advertisements or a device inventory to the SD card. A saved rule should work during normal scanning whenever its selected advertisement fields can be represented by a passive BlueZ filter.
 
@@ -15,9 +15,9 @@ The design must preserve BLE's Clues' passive-by-default behavior and avoid writ
 ### Navigation and pages
 
 - **Monitor** shows scanner status and recent signature/watch-rule matches. It no longer embeds the raw advertisement window.
-- **Live Feed** (`/live`) shows the existing bounded, volatile advertisement window. It refreshes from the authenticated scan API, continues to redact device addresses, and explains that observations are short-lived and not a saved device inventory.
-- **Devices** remains the temporary broad device browser. Each observed-device row gains a **Watch this** action.
-- **Watch Lists** (`/watchlists`) shows named lists, their rules, current rule state, and whether each rule has a compatible passive scan filter. Operators can rename or delete a list, disable/enable a rule, and delete a rule.
+- **Live Feed** (`/live`) shows the existing bounded, volatile advertisement window. It refreshes from the authenticated scan API, continues to redact device addresses, shows assigned SIG company names beside known manufacturer company IDs, and explains that observations are short-lived and not a saved device inventory.
+- **Devices** remains the temporary broad device browser. Manufacturer data shows the assigned Bluetooth SIG company name beside its numeric company identifier when one is present in the bundled registry. Each observed-device row gains a **Watch this** action.
+- **Watch Lists** (`/watchlists`) shows named lists, their rules, current rule state, and whether each rule has a compatible passive scan filter. Manufacturer-data criteria show the assigned company name beside the identifier. Operators can rename or delete a list, disable/enable a rule, and delete a rule.
 
 All pages use the existing authenticated dashboard and CSRF protections. Navigation remains usable on narrow screens.
 
@@ -46,6 +46,12 @@ Use the existing signature YAML file and matcher as the single source of truth. 
 The existing signature predicates remain the supported rule language. Rule changes are written with the same atomic replacement and validation approach used for dashboard settings. The web service validates the full resulting signature file before replacing it. Scanner restart is required to load changed rules; no polling or per-advertisement config reads are added.
 
 The existing observation threshold and cooldown remain in effect. A rule must receive at least three qualifying advertisements before emitting a match event. Existing event retention and maximum-event limits remain in effect. Watch rules do not enable notifications by default. Match history identifies the watch-list name and rule name so the operator can tell which saved rule matched.
+
+## Company identifier names
+
+Use the Bluetooth SIG public company-identifiers YAML registry at `https://bitbucket.org/bluetooth-SIG/public/src/main/assigned_numbers/company_identifiers/company_identifiers.yaml` as the source for company names. Generate a compact, bundled lookup snapshot when preparing a software release and include it in the application package. The Pi performs no network request for this lookup at startup or while scanning, and does not write registry data to its SD card. A later application release can ship a refreshed snapshot. Attribute the snapshot to the Bluetooth SIG Assigned Numbers repository and retain its source URL in the generated metadata or adjacent documentation.
+
+Show a company name only for a manufacturer-data company identifier present in the registry. Manufacturer-specific advertising data carries this two-byte company identifier; the mapping is not a lookup of the BLE address or a MAC-address OUI. Label it as the assigned SIG company name; an unknown value remains visible as its numeric company identifier with an “Unknown SIG company ID” label. The registry entry describes the company associated with the assigned identifier; it does not prove which company made, owns, or operates the observed device.
 
 ## Passive scan filter derivation
 
@@ -83,6 +89,8 @@ Do not log observed addresses or payloads during rule saves, scanner startup, or
 - Keep full observed addresses limited to the authenticated Devices page and operator-selected exact-address rules; never put them in URLs or logs.
 - Use safe YAML parsing, strict schema validation, unique stable rule IDs, bounded field lengths, and atomic writes. Reject unknown fields and malformed hexadecimal data.
 - A saved watch rule labels a pattern match; it does not establish manufacturer, product, ownership, or individual identity.
+- A SIG company name is an assigned-number lookup label only; do not present it as verified device-vendor identity.
+- Do not use SIG company identifiers as BLE address OUIs; they are manufacturer-data identifiers carried inside advertisements.
 
 ## Out of scope
 
@@ -90,7 +98,7 @@ Do not log observed addresses or payloads during rule saves, scanner startup, or
 - Connecting, pairing, GATT enumeration, or controlling BLE devices.
 - Notifications for new watch rules; they remain disabled unless separately enabled through existing notification configuration.
 - Durable raw advertisement capture, device-history export, or address correlation across rotations.
-- Automatic lookup of company identifiers or claims that a prefix identifies a particular product.
+- Runtime network lookups for assigned company names, or claims that a SIG company identifier or payload prefix identifies a specific product, device maker, owner, or operator.
 
 ## Acceptance criteria
 
@@ -104,7 +112,9 @@ Do not log observed addresses or payloads during rule saves, scanner startup, or
 8. Reboot clears the raw advertisement window as it does today; named watch rules persist in the signature file.
 9. Routine advertisements and volatile device rows are not added to durable storage or per-packet logs. Watch-rule match events obey existing SQLite retention and size limits.
 10. Existing signatures without a watch-list name, Monitor event history, Settings filters, and temporary browser start/stop behavior remain compatible.
+11. Known manufacturer company IDs display the bundled SIG company name in Live Feed, Devices, and Watch Lists; unknown IDs keep their numeric value and receive an unknown label.
+12. The Pi can render company names with no Internet connection, scanning does not fetch or persist registry updates, and a missing company ID never prevents the advertisement from appearing.
 
 ## Verification approach
 
-Add tests for watch-rule YAML parsing and round-tripping, all/any matching, derived BlueZ filter mappings and deduplication, unsupported-filter status, and preservation of manually configured filters. Test atomic watch-list mutations, restart rollback, CSRF/auth rejection, SQLite migration and watch-list event retention, and API serialization. Verify page navigation and that the Live Feed remains redacted and volatile. Run existing scanner, signature, pipeline, storage, web, and browser-mode regression coverage. On the Pi, save compatible and address-only rules, confirm passive coverage labels and scanner status, confirm a derived passive filter reaches the existing matcher, and confirm Device Browser Stop restores passive filters without changing saved scan mode.
+Add tests for watch-rule YAML parsing and round-tripping, all/any matching, derived BlueZ filter mappings and deduplication, unsupported-filter status, and preservation of manually configured filters. Test atomic watch-list mutations, restart rollback, CSRF/auth rejection, SQLite migration and watch-list event retention, SIG registry parsing and unknown-ID fallback, and API serialization. Verify page navigation and that the Live Feed remains redacted and volatile. Run existing scanner, signature, pipeline, storage, web, and browser-mode regression coverage. On the Pi, save compatible and address-only rules, confirm passive coverage labels and scanner status, confirm a derived passive filter reaches the existing matcher, and confirm Device Browser Stop restores passive filters without changing saved scan mode.
