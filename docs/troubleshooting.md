@@ -2,27 +2,54 @@
 
 ## Admin dashboard is unreachable
 
-The admin dashboard is served through Ethernet and the optional AP address. For Ethernet, check `ip -4 addr show dev eth0`; for hotspot access, check `systemctl status bt-signature-detector-ap.service` and `nmcli connection show --active`. The hidden AP is called `Detector-Admin`, uses `192.168.4.1`, and must be enabled in Settings. Check `systemctl status bt-signature-detector-web.service` and `journalctl -u bt-signature-detector-web.service -n 100 --no-pager` for service errors.
+The dashboard is available over Ethernet and, when enabled, the local hotspot. For Ethernet, check `ip -4 addr show dev eth0`. For hotspot access, check `systemctl status bt-signature-detector-ap.service` and `nmcli connection show --active`. The hidden `Detector-Admin` network uses `192.168.4.1` and must be enabled in **Settings**. Check the web service and its recent logs for errors:
+
+```sh
+sudo systemctl status bt-signature-detector-web.service
+sudo journalctl -u bt-signature-detector-web.service -n 100 --no-pager
+```
 
 ## Web login and password
 
-If the UI password is forgotten, stop the web service and remove only the configured `web.password_hash_file`; restart the service and create a new UI password. Do not delete the session key or detector database to reset login.
+If you forget the dashboard password, stop the web service and remove only the file configured by `web.password_hash_file`. Restart the service and create a new password at login. Do not remove the session key or detector database.
 
 ## No BLE observations
 
-Check `systemctl status bluetooth.service bt-signature-detector.service` and `journalctl -u bt-signature-detector.service -f`. Validate the configuration and adapter name. Passive mode requires BlueZ `or_patterns`; a generic or synthetic pattern is unlikely to match nearby devices. Controller/firmware limitations may prevent passive scanning. The service retries with a capped delay and never falls back to active scanning.
+Check the Bluetooth and scanner services, then validate the adapter and configuration:
 
-For an explicitly started Devices scan, check the BLE scanner state and error shown on the Devices page. The `scanner-status.json` snapshot in `/run/bt-signature-detector` distinguishes an active systemd process from a scanner that is retrying after an adapter error. Use **Stop and restore filters** even when the adapter is unavailable; reboot also clears temporary browser mode.
+```sh
+sudo systemctl status bluetooth.service bt-signature-detector.service
+sudo journalctl -u bt-signature-detector.service -f
+```
 
-If **Start device scan** reports an exit status, the dismissible error panel keeps the helper's sanitized stderr through normal status polling. Check `sudo -n /usr/local/sbin/bt-detector-device-browser start` and `sudo -n /usr/local/sbin/bt-detector-device-browser stop` as the `bt-web` account, then inspect `journalctl -u bt-signature-detector.service -n 100 --no-pager`. The sudo rule intentionally grants only these fixed start/stop helper actions.
+Passive mode requires BlueZ `or_patterns`. A generic or synthetic pattern may not match nearby devices, and some controllers cannot monitor passively. The scanner retries with a capped delay; it does not switch to active scanning on its own.
+
+For a Devices scan, check the status and any error shown on that page. The `scanner-status.json` snapshot in `/run/bt-signature-detector` shows whether the process is active or retrying after an adapter error. Use **Stop and restore filters** even if the adapter is unavailable. Reboot also clears temporary browser mode.
+
+If **Start device scan** reports an exit status, the error panel shows the helper's sanitized output and remains visible while status updates arrive. Check the fixed helper commands as the `bt-web` account, then inspect the scanner log:
+
+```sh
+sudo -u bt-web sudo -n /usr/local/sbin/bt-detector-device-browser start
+sudo -u bt-web sudo -n /usr/local/sbin/bt-detector-device-browser stop
+sudo journalctl -u bt-signature-detector.service -n 100 --no-pager
+```
+
+The sudo rule allows only these start and stop actions.
 
 ## Wi-Fi scan is unavailable
 
-Wi-Fi scanning is off by default. Enable it from **Settings** while the hidden admin hotspot is off. The single WLAN radio cannot scan and host the hotspot at the same time; mode changes stop one service before starting the other. Check `systemctl status bt-signature-detector-wifi.service bt-signature-detector-wifi-mode.service` and `journalctl -u bt-signature-detector-wifi.service -n 50 --no-pager`. The scan uses `iw` and `CAP_NET_ADMIN`; it does not join detected networks. Raw scan results stay in `/run` and are not written to SQLite or the SD card.
+Wi-Fi scanning is off by default. Enable it in **Settings** when the hidden hotspot is off. The single radio cannot scan and host the hotspot together; switching modes stops one service before starting the other. Check the Wi-Fi services and recent scan log:
+
+```sh
+sudo systemctl status bt-signature-detector-wifi.service bt-signature-detector-wifi-mode.service
+sudo journalctl -u bt-signature-detector-wifi.service -n 50 --no-pager
+```
+
+The scanner uses `iw` and `CAP_NET_ADMIN`; it does not join networks. Raw results stay in `/run` and are not written to SQLite or the SD card.
 
 ## No detection or alert
 
-Check the signature file, RSSI threshold, and three-observation minimum. A stronger RSSI number is closer to zero. Custom signature notifications require `confidence: confirmed` and notifications enabled. Bundled BLE/Wi-Fi indicators use the separate score threshold of 40; an opposite-protocol match within 60 seconds adds 20 points to the later hit. These indicator matches may dispatch through configured notification backends, but are not confirmation of equipment identity, ownership, or activity. `detector test-alert` tests enabled backends. Add `--confirm-sms` before sending a live SMS test.
+Check the signature file, RSSI threshold, and three-observation minimum. RSSI values closer to zero indicate a stronger signal. Custom signature alerts require `confidence: confirmed` and notifications enabled. Bundled BLE and Wi-Fi indicators use a separate threshold of 40; a match from the other protocol within 60 seconds adds 20 points to the later hit. These are indicators for review, not confirmation of identity, ownership, or activity. Use `detector test-alert` to test enabled backends. Add `--confirm-sms` to send an actual SMS test.
 
 For a saved watch rule, check its passive coverage on **Watch Lists**. **Browser scan only** rules cannot contribute an acquisition filter and will not match in filtered passive mode unless an advertisement also passes a manually configured BlueZ filter. **Partial** coverage applies to `any` rules with a mix of filterable and unfilterable criteria. A watch-rule change restarts the scanner; if that restart fails, the prior signature file is restored. The Live Feed shows only the packets the current scan mode receives and clears on reboot.
 
