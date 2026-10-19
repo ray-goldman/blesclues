@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from bt_signature_detector.updates import UpdateVerifier, check_release, stage_download, stage_upload, canonical_manifest
+from bt_signature_detector.updates import UpdateVerifier, check_release, stage_download, stage_upload, canonical_manifest, verify_manifest
 
 
 class FakeTransport:
@@ -58,6 +58,12 @@ class UpdateSourceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             result = stage_upload(io.BytesIO(self.bundle_data), Path(directory), self.verifier)
             self.assertEqual(result.manifest.version, "2.0.1")
+
+    def test_alpha_build_version_is_valid_in_signed_manifest(self):
+        data = {**self.manifest_data, "version": "0.1.0a1"}
+        raw = canonical_manifest(data)
+        release = verify_manifest(raw, self.private.sign(raw), self.private.public_key())
+        self.assertEqual(release.version, "0.1.0a1")
 
 
 if __name__ == "__main__": unittest.main()

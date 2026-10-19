@@ -1,1 +1,50 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf }}"><title>Software updates · Bluetooth Detector</title><link rel="stylesheet" href="/static/style.css"></head><body><header><div class="brand"><a href="/" class="mark">B</a><div><strong>Bluetooth Detector</strong><small>Software updates</small></div></div><a class="ghost link" href="/">Back to dashboard</a></header><main><section class="hero"><div><p class="eyebrow">RELEASE MANAGEMENT</p><h1>Software updates</h1><p class="muted">Check an HTTPS release feed over Ethernet or stage a signed bundle from this device.</p><p id="installed" class="small muted">Installed version —</p></div><span id="connection" class="pill">Manual only</span></section><section class="panel"><div class="panel-head"><div><p class="eyebrow">AVAILABLE RELEASE</p><h2>Check for a build</h2></div><button id="check">Check feed</button></div><p id="available" class="muted">No release checked yet.</p><p id="last-check" class="small muted">Not checked</p><button id="stage-download" class="secondary" disabled>Stage checked build</button></section><section class="panel"><p class="eyebrow">OFFLINE INSTALL</p><h2>Upload a signed bundle</h2><p class="muted">The signature and artifact hash are verified before the bundle is staged.</p><form id="upload"><input type="file" name="bundle" accept=".zip" required><button>Verify and stage</button></form></section><section class="panel"><p class="eyebrow">STAGED BUILDS</p><h2>Ready to apply</h2><div id="staged" class="rows"><p class="empty">No staged builds.</p></div><p class="small muted">Applying restarts the detector and rolls back if its health check fails.</p></section><p id="message" class="error" role="status"></p></main><script src="/static/updates.js" defer></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <title>Updates · BLE's Clues</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="BLE's Clues monitor">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="brand-name">BLE's Clues <small>FIELD CONSOLE</small></span>
+    </a>
+    <nav class="navigation" aria-label="Main navigation">
+      <a href="/">Monitor</a><a href="/live">Live Feed</a><a href="/devices">Devices</a><a href="/watchlists">Watch Lists</a><a href="/settings">Settings</a><a href="/updates" aria-current="page">Updates</a>
+    </nav>
+    <a class="back-link" href="/">← Monitor</a>
+  </header>
+  <main class="page-shell">
+    <section class="page-heading">
+      <div><p class="kicker">RELEASE MANAGEMENT</p><h1>Signed updates</h1><p class="intro-copy">Check the configured feed or bring a verified build to the Pi.</p></div>
+      <span id="connection" class="state-tag waiting"><i></i>Manual check</span>
+    </section>
+    <section class="release-surface">
+      <p class="kicker">01 · ONLINE FEED</p>
+      <div class="section-heading release-heading"><div><h2>Check for a release</h2><p>Feed checks need internet access. The signature is verified before staging.</p></div><button id="check" class="primary-button" type="button">Check feed</button></div>
+      <p id="installed" class="mono quiet-text">Installed version —</p>
+      <p id="available" class="release-message">No release checked yet.</p>
+      <div class="release-toolbar"><button id="stage-download" class="outline-button" type="button" disabled>Stage checked build</button><span id="last-check" class="quiet-text">Not checked</span></div>
+    </section>
+    <section class="release-surface">
+      <p class="kicker">02 · LOCAL BUNDLE</p>
+      <h2>Upload a signed build</h2>
+      <p>Choose a release bundle from this device. BLE's Clues verifies its signature and artifact hash before it is staged.</p>
+      <form id="upload" class="upload-form"><input type="file" name="bundle" accept=".zip" required><button class="primary-button" type="submit">Verify and stage</button></form>
+    </section>
+    <section class="release-surface">
+      <p class="kicker">03 · READY TO APPLY</p>
+      <h2>Staged builds</h2>
+      <div id="staged" class="release-list"><p class="empty-state">No staged builds.</p></div>
+      <p class="quiet-text">Applying restarts the scanner. A failed health check rolls the Pi back to the previous version.</p>
+    </section>
+    <p id="message" class="error-message" role="status"></p>
+  </main>
+  {% include "_build_footer.html" %}
+  <script src="/static/updates.js" defer></script>
+</body>
+</html>

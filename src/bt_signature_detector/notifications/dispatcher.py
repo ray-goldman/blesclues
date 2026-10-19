@@ -28,7 +28,9 @@ class NotificationDispatcher:
                       for notifier, queue in zip(self.notifiers, self.queues)]
 
     def submit(self, event: DetectionEvent) -> bool:
-        if event.confidence is not Confidence.CONFIRMED or not event.alert_enabled:
+        scored_builtin = event.effective_score is not None
+        if (not event.alert_enabled or
+                (not scored_builtin and event.confidence is not Confidence.CONFIRMED)):
             return False
         accepted = True
         for queue in self.queues:

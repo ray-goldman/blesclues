@@ -1,0 +1,4 @@
+bt-web ALL=(root) NOPASSWD: /usr/local/sbin/bt-detector-wifi-mode scan-start
+bt-web ALL=(root) NOPASSWD: /usr/local/sbin/bt-detector-wifi-mode scan-stop
+bt-web ALL=(root) NOPASSWD: /usr/local/sbin/bt-detector-wifi-mode ap-start
+bt-web ALL=(root) NOPASSWD: /usr/local/sbin/bt-detector-wifi-mode ap-stop

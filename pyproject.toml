@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bt-signature-detector"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Headless BLE advertisement signature detector for Raspberry Pi"
 requires-python = ">=3.11"
 dependencies = [
@@ -26,4 +26,9 @@ detector = "bt_signature_detector.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-bt_signature_detector = ["web_templates/*.html", "web_static/*.js", "web_static/*.css"]
+bt_signature_detector = ["web_templates/*.html", "web_static/*.js", "web_static/*.css", "data/*.json", "data/source/*"]
+
+[tool.setuptools.data-files]
+"share/bt-signature-detector/systemd" = ["systemd/*.service", "systemd/*.sudoers"]
+"share/bt-signature-detector/systemd/bluetooth.service.d" = ["systemd/bluetooth.service.d/*.conf"]
+"share/bt-signature-detector/scripts" = ["scripts/apply_update_helper.sh", "scripts/restart_detector_helper.sh", "scripts/device_browser_helper.sh", "scripts/wifi_mode_helper.sh"]

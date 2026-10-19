@@ -30,6 +30,8 @@ class DetectionFilter:
         now = self.clock()
         events: list[DetectionEvent] = []
         for signature in matches:
+            if not signature.enabled:
+                continue
             key = (signature.signature_id, advertisement.identifier)
             state = self._states.get(key)
             if state is None or now - state.last_seen > self.absence:
@@ -49,7 +51,8 @@ class DetectionFilter:
             state.last_alert = now
             events.append(DetectionEvent(signature.signature_id, signature.name, signature.confidence,
                 advertisement.identifier, state.first_seen, advertisement.timestamp,
-                state.strongest_rssi, state.count, alert_enabled=signature.alert_enabled))
+                state.strongest_rssi, state.count, alert_enabled=signature.alert_enabled,
+                watchlist_name=signature.watchlist))
         return events
 
     def expire(self, now: datetime) -> int:

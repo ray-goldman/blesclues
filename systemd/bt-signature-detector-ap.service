@@ -1,13 +1,16 @@
 [Unit]
-Description=Activate local Bluetooth Detector Wi-Fi access point
+Description=Optional hidden Detector-Admin Wi-Fi access point
 After=NetworkManager.service
 Requires=NetworkManager.service
-Before=bt-signature-detector-dhcp.service
+Conflicts=bt-signature-detector-wifi.service
+Before=bt-signature-detector-dhcp.service bt-signature-detector-web.service
+Wants=bt-signature-detector-dhcp.service
 
 [Service]
 Type=oneshot
 User=root
 ExecStart=/opt/bt-signature-detector/active/bin/python -m bt_signature_detector.ap_helper activate --config /etc/bt-signature-detector/detector.yaml
+ExecStop=/opt/bt-signature-detector/active/bin/python -m bt_signature_detector.ap_helper deactivate
 RemainAfterExit=yes
 Restart=on-failure
 RestartSec=10

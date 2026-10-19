@@ -1,0 +1,8 @@
+# WiFi SSID patterns (case-insensitive regex)
+# format: pattern<TAB>vendor<TAB>confidence<TAB>notes
+
+(?i)^flock camera net\.	Flock Safety	high	Newer cameras; these use locally administered MACs, so OUI matching misses them
+(?i)^flock-[0-9a-f]{6}$	Flock Safety	high	From flock-you-esp32
+(?i)^penguin	Flock Safety	low	From flock-you-esp32; generic word, verify
+(?i)^pigvision	Flock Safety	medium	From flock-you-esp32
+(?i)^(IBR|COR|R)\d{3,4}-	Cradlepoint	low	UNVERIFIED default model-based SSID; many departments rename or hide SSIDs, rely on BSSID OUI

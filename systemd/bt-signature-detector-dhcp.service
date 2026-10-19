@@ -1,5 +1,6 @@
 [Unit]
-Description=Local DHCP for BLE Detector access point
+Description=Local DHCP for hidden Detector-Admin access point
+ConditionPathExists=/run/bt-signature-detector-ap.enabled
 After=bt-signature-detector-ap.service
 Requires=bt-signature-detector-ap.service
 

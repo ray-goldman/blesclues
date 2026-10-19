@@ -1,1 +1,88 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf }}"><title>Settings · Bluetooth Detector</title><link rel="stylesheet" href="/static/style.css"></head><body><header><div class="brand"><a href="/" class="mark">B</a><div><strong>Bluetooth Detector</strong><small>Configuration</small></div></div><a class="ghost link" href="/">Back to dashboard</a></header><main><section class="hero"><div><p class="eyebrow">DEVICE CONFIGURATION</p><h1>Settings</h1><p class="muted">Changes are validated before saving. Wi-Fi updates may briefly restart the access point.</p></div></section><form id="settings" class="panel form-grid"><label>Minimum RSSI (dBm)<input name="global_min_rssi" type="number" min="-127" max="20" placeholder="No global threshold"></label><label>Detection cooldown (seconds)<input name="cooldown_seconds" type="number" min="0" max="86400" required></label><label>Minimum observations<input name="min_observations" type="number" min="3" max="100000" required></label><label>Wi-Fi network name<input name="ssid" maxlength="32" required></label><label>Wi-Fi passphrase<input name="passphrase" type="password" minlength="8" maxlength="63" autocomplete="new-password" placeholder="Leave blank to keep current"></label><label>Wi-Fi channel<input name="channel" type="number" min="1" max="13" required></label><label>Regulatory country<input name="country" maxlength="2" minlength="2" required></label><label>HTTPS release manifest URL<input name="manifest_url" type="url" placeholder="https://updates.example.org/stable.json"></label><div class="form-actions"><button type="submit">Save settings</button><span id="result" class="muted" role="status"></span></div></form><form id="password" class="panel form-grid"><div><p class="eyebrow">ACCOUNT SECURITY</p><h2>Change UI password</h2></div><label>Current UI password<input name="old_password" type="password" required autocomplete="current-password"></label><label>New UI password<input name="new_password" type="password" minlength="12" required autocomplete="new-password"></label><div class="form-actions"><button type="submit">Change password</button><span id="password-result" class="muted" role="status"></span></div></form></main><script src="/static/settings.js" defer></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <title>Settings · BLE's Clues</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="BLE's Clues monitor">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="brand-name">BLE's Clues <small>FIELD CONSOLE</small></span>
+    </a>
+    <nav class="navigation" aria-label="Main navigation">
+      <a href="/">Monitor</a><a href="/live">Live Feed</a><a href="/devices">Devices</a><a href="/watchlists">Watch Lists</a><a href="/settings" aria-current="page">Settings</a><a href="/updates">Updates</a>
+    </nav>
+    <a class="back-link" href="/">← Monitor</a>
+  </header>
+  <main class="page-shell">
+    <section class="page-heading">
+      <div><p class="kicker">DEVICE CONFIGURATION</p><h1>Detection &amp; access</h1><p class="intro-copy">Changes are checked before they’re saved to the Pi.</p></div>
+    </section>
+    <form id="settings" class="settings-form">
+      <section class="settings-section">
+        <div class="section-intro"><p class="kicker">01 · MATCHING</p><h2>Detection thresholds</h2><p>A match is recorded when its signature rules and observation threshold are met.</p></div>
+        <div class="form-fields">
+          <label class="field">Minimum signal strength (dBm)<input name="global_min_rssi" type="number" min="-127" max="20" placeholder="No global floor"><span class="field-note">Leave blank to use each signature’s own threshold.</span></label>
+          <label class="field">Repeat cooldown (seconds)<input name="cooldown_seconds" type="number" min="0" max="86400" required><span class="field-note">Suppresses repeat records for a confirmed device match.</span></label>
+          <label class="field">Observations required<input name="min_observations" type="number" min="3" max="100000" required><span class="field-note">The minimum accepted value is three.</span></label>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-intro"><p class="kicker">02 · ADVANCED PASSIVE FILTERS</p><h2>BlueZ advertisement filters</h2><p>These are low-level byte patterns checked before passive scan results reach watch rules. They filter raw advertisement bytes, not MAC addresses. A wrong pattern can hide matching devices; leave this section alone unless you know the bytes you need.</p><p>Device Browser temporarily scans broadly and ignores these filters. Watch-list rules show their passive coverage on the Watch Lists page.</p></div>
+        <div class="form-fields prefix-editor">
+          <div class="prefix-list-heading"><strong>Configured BlueZ filters</strong><span class="field-note">Hex bytes within BLE advertising data. AD type 255 is manufacturer data.</span></div>
+          <div id="prefix-list" class="prefix-list" aria-live="polite"></div>
+          <button id="add-prefix" class="outline-button add-prefix" type="button">Add filter prefix</button>
+          <div class="builtin-catalog">
+            <div class="prefix-list-heading"><strong>Bundled BLE and Wi-Fi indicators</strong><span id="score-policy" class="field-note">Loading scoring policy…</span></div>
+            <p class="field-note">These patterns are clues for review, not proof of device identity. Vendor or model indicators can produce false positives.</p>
+            <div class="feed-table-wrap"><table class="feed-table"><thead><tr><th>Protocol</th><th>Vendor</th><th>Match</th><th>Pattern</th><th>Score</th><th>Source notes</th></tr></thead><tbody id="builtin-rules"><tr><td colspan="6" class="empty-state">Loading built-in indicators…</td></tr></tbody></table></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-intro"><p class="kicker">03 · RADIO MODE</p><h2>Nearby Wi-Fi discovery</h2><p>The Pi has one Wi-Fi radio. Scanning and the hidden admin hotspot are exclusive modes; switching modes stops the current service before starting the other.</p></div>
+        <div class="form-fields">
+          <label class="check-field wide"><input name="wifi_scanning_enabled" type="checkbox"><span>Enable nearby Wi-Fi scans</span></label>
+          <p class="field-note wide">Scans for network names and BSSIDs every 15 seconds. BLE's Clues does not join networks. Raw results stay in temporary memory and clear when scanning stops or the Pi restarts.</p>
+          <p id="wifi-mode-state" class="field-note wide" role="status">Checking Wi-Fi radio mode…</p>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-intro"><p class="kicker">04 · LOCAL ACCESS</p><h2>Hidden Wi-Fi network</h2><p>Optional admin access at <span class="mono">192.168.4.1</span>. Disabled on first setup; it does not forward traffic to the internet. Enabling it stops nearby Wi-Fi scanning.</p></div>
+        <div class="form-fields">
+          <label class="check-field wide"><input name="access_point_enabled" type="checkbox"><span>Enable the hidden hotspot</span></label>
+          <label class="field">Network name<input name="ssid" type="text" minlength="1" maxlength="32" required><span class="field-note">Add this hidden network manually on your phone or laptop.</span></label>
+          <label class="field">Wi-Fi password<input name="passphrase" type="password" minlength="8" maxlength="63" autocomplete="new-password" placeholder="Leave blank to keep the current password"><span class="field-note">Factory default: easypassword. Use 8–63 characters.</span></label>
+          <label class="field">Wi-Fi channel<select name="channel"><option value="1">1</option><option value="6">6</option><option value="11">11</option></select><span class="field-note">Use a channel supported in the Pi’s operating country.</span></label>
+          <p id="ap-state" class="field-note">Checking hotspot state…</p>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-intro"><p class="kicker">05 · RELEASES</p><h2>Update feed</h2><p>Feed checks require internet access. A signed bundle can be uploaded locally.</p></div>
+        <label class="field">HTTPS manifest address<input name="manifest_url" type="url" placeholder="https://updates.example.org/stable.json"><span class="field-note">The release signature is checked before a build can be staged.</span></label>
+      </section>
+      <div class="settings-footer"><button class="primary-button" type="submit">Save changes</button><span id="result" class="form-result" role="status"></span></div>
+    </form>
+
+    <form id="password" class="account-form">
+      <div><p class="kicker">ACCOUNT SECURITY</p><h2>Change dashboard password</h2><p>This login is separate from the hotspot password. Use at least 12 characters.</p></div>
+      <div class="account-fields">
+        <label>Current password<input name="old_password" type="password" required autocomplete="current-password"></label>
+        <label>New password<input name="new_password" type="password" minlength="12" required autocomplete="new-password"></label>
+        <button class="primary-button" type="submit">Change password</button><span id="password-result" class="form-result" role="status"></span>
+      </div>
+    </form>
+  </main>
+  {% include "_build_footer.html" %}
+  <script src="/static/settings.js" defer></script>
+</body>
+</html>

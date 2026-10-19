@@ -100,5 +100,26 @@ class UpdateVerificationTests(unittest.TestCase):
             self.assertTrue(active["path"].name.startswith("1.2.3-"))
             self.assertTrue((active["path"] / "runtime.txt").exists())
 
+    def test_asset_install_failure_restores_old_web_service_after_slot_rollback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "app"
+            old = root / "venv-old"
+            old.mkdir(parents=True)
+            active = {"path": old}
+            staged_dir = root / "staged"
+            staged_dir.mkdir()
+            verified = VerifiedRelease(
+                ReleaseManifest("1.2.3", self.manifest["artifact_url"], self.manifest["sha256"], len(self.artifact), "Test release"), self.artifact)
+            calls = []
+            coordinator = UpdateCoordinator(root, runner=lambda args, **kwargs: calls.append(args),
+                health_check=lambda: True, get_active=lambda: active["path"],
+                switch_active=lambda target: active.update(path=target))
+            coordinator._install_release_assets = lambda _slot: (_ for _ in ()).throw(RuntimeError("unit restart failed"))
+            staged = coordinator.stage(verified)
+            result = coordinator.apply(staged.staged_id)
+            self.assertFalse(result.success)
+            self.assertEqual(active["path"], old)
+            self.assertIn(["systemctl", "restart", "bt-signature-detector-web.service"], calls)
+
 
 if __name__ == "__main__": unittest.main()

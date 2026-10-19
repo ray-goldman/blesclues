@@ -1,0 +1,5 @@
+oui,vendor,protocol,device_class,confidence,speed_trap_relevance,notes,source
+00:25:DF,Taser International (Axon),ble,body_cam|holster_sensor|signal_unit,high,high,"All Axon gear shares this OUI; also used by corrections and some private security",https://lemm.ee/post/9157520
+00:30:44,CradlePoint Inc,wifi,in_vehicle_lte_router,medium,medium,"Match on BSSID; heavy false positives (buses, ambulances, utility fleets, retail)",https://maclookup.app/macaddress/003044
+00:E0:1C,CradlePoint Inc,wifi,in_vehicle_lte_router,medium,medium,"Second Cradlepoint MA-L block; same false-positive caveat",https://maclookup.app/macaddress/00e01c
+B4:1E:52,Flock Safety,wifi,alpr_camera,high,low,"Registered directly to Flock; fixed ALPR, not speed enforcement",https://simeononsecurity.com/articles/flock-finder-oui-false-positive-audit-2026/

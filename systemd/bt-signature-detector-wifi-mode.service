@@ -1,0 +1,17 @@
+[Unit]
+Description=Reconcile the configured Wi-Fi radio mode
+After=NetworkManager.service
+Requires=NetworkManager.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/opt/bt-signature-detector/active/bin/python -m bt_signature_detector.wifi_mode_helper reconcile --config /etc/bt-signature-detector/detector.yaml
+RemainAfterExit=yes
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/run/bt-signature-detector
+
+[Install]
+WantedBy=multi-user.target

@@ -21,14 +21,23 @@ def main(argv=None):
     group.add_argument("--changes-stdin", action="store_true")
     activate = sub.add_parser("activate")
     activate.add_argument("--config", required=True)
+    sub.add_parser("deactivate")
     args = parser.parse_args(argv)
     client = AccessPointClient()
+    if args.action == "deactivate":
+        try:
+            client.deactivate()
+            return 0
+        except (OSError, RuntimeError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
     if args.action == "activate":
         from .config import load_app_config
         try:
-            client.activate(load_app_config(__import__("pathlib").Path(args.config)).access_point.country)
+            access_point = load_app_config(__import__("pathlib").Path(args.config)).access_point
+            client.activate(access_point.country, enabled=access_point.enabled)
             return 0
-        except (ValueError, OSError) as exc:
+        except (ValueError, OSError, RuntimeError) as exc:
             print(str(exc), file=sys.stderr)
             return 2
     if args.action == "status":

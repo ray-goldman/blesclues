@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <title>Watch Lists · BLE's Clues</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="BLE's Clues monitor"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span class="brand-name">BLE's Clues <small>FIELD CONSOLE</small></span></a>
+    <nav class="navigation" aria-label="Main navigation">
+      <a href="/">Monitor</a><a href="/live">Live Feed</a><a href="/devices">Devices</a><a href="/watchlists" aria-current="page">Watch Lists</a><a href="/settings">Settings</a><a href="/updates">Updates</a>
+    </nav>
+    <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="quiet-button" type="submit">Sign out</button></form>
+  </header>
+  <main class="workspace">
+    <section class="page-heading"><div><p class="kicker">SAVED MATCH RULES</p><h1>Watch Lists</h1><p class="intro-copy">Rules are checked against advertisements received by the configured passive scan.</p></div><a class="outline-button watch-browser-link" href="/devices">Find a device</a></section>
+    <p class="watchlist-note">Passive coverage describes which rules can help BlueZ receive matching advertisements. Browser scan only rules remain available during the temporary Device Browser scan.</p>
+    <p id="watchlists-error" class="error-message" role="status"></p>
+    <section id="watchlists-empty" class="surface watch-empty" hidden><p class="kicker">NO SAVED RULES</p><h2>No watch lists yet</h2><p>Start a temporary scan in Devices, then save an observation as a rule.</p><a class="primary-button" href="/devices">Open Devices</a></section>
+    <section id="watchlists-layout" class="watchlist-layout" hidden>
+      <aside class="watchlist-sidebar surface"><p class="kicker">LISTS</p><nav id="watchlist-menu" aria-label="Saved watch lists"></nav></aside>
+      <section class="watchlist-main surface">
+        <div class="watchlist-heading"><div><p class="kicker">SELECTED LIST</p><h2 id="selected-watchlist">—</h2><p id="rule-count" class="section-note"></p></div><div class="watchlist-actions"><button id="rename-watchlist" class="outline-button" type="button">Rename</button><button id="delete-watchlist" class="quiet-danger" type="button">Delete list</button></div></div>
+        <div class="watch-rule-table-wrap"><table class="watch-rule-table"><thead><tr><th>Rule and criteria</th><th>Passive coverage</th><th>State</th><th></th></tr></thead><tbody id="watch-rule-rows"></tbody></table></div>
+      </section>
+    </section>
+  </main>
+  {% include "_build_footer.html" %}
+  <script src="/static/watchlists.js" defer></script>
+</body>
+</html>

@@ -21,10 +21,17 @@ notifications:
   sms:
     enabled: false
 access_point:
-  enabled: true
-  ssid: BLE-Detector
+  enabled: false
+  ssid: Detector-Admin
   passphrase: easypassword
+  hidden: true
+  interface_address: 192.168.4.1/24
   country: ""
+  channel: 6
+  profile_name: Detector-Admin
+wifi_scanning:
+  enabled: false
+  interval_seconds: 15
 web:
   enabled: true
   port: 8080

@@ -61,11 +61,72 @@ class UpdateCoordinator:
 
     def _service_healthy(self) -> bool:
         for _ in range(6):
-            result = self.runner(["systemctl", "is-active", "--quiet", "bt-signature-detector.service"],
-                                capture_output=True, check=False, text=True)
-            if result.returncode == 0: return True
+            scanner = self.runner(["systemctl", "is-active", "--quiet", "bt-signature-detector.service"],
+                                  capture_output=True, check=False, text=True)
+            web = self.runner(["systemctl", "is-active", "--quiet", "bt-signature-detector-web.service"],
+                              capture_output=True, check=False, text=True)
+            if scanner.returncode == 0 and web.returncode == 0: return True
             time.sleep(2)
         return False
+
+    def _wifi_unit_state(self) -> dict[str, tuple[str, str]]:
+        units = ("bt-signature-detector-wifi-mode.service", "bt-signature-detector-ap.service",
+                 "bt-signature-detector-wifi.service", "bt-signature-detector-dhcp.service")
+        state = {}
+        for unit in units:
+            active = self.runner(["systemctl", "is-active", unit], capture_output=True, check=False, text=True)
+            enabled = self.runner(["systemctl", "is-enabled", unit], capture_output=True, check=False, text=True)
+            state[unit] = ((active.stdout or "unknown").strip(), (enabled.stdout or "unknown").strip())
+        return state
+
+    def _restore_wifi_unit_state(self, state: dict[str, tuple[str, str]]) -> None:
+        for unit in state:
+            self.runner(["systemctl", "stop", unit], check=False, capture_output=True, text=True)
+        for unit, (_active, enabled) in state.items():
+            if enabled == "enabled":
+                self.runner(["systemctl", "enable", unit], check=False, capture_output=True, text=True)
+            else:
+                self.runner(["systemctl", "disable", unit], check=False, capture_output=True, text=True)
+        # Let the old reconciler run first when it existed, then restore any
+        # previously active one-shot/client units from the captured state.
+        for unit in state:
+            if state[unit][0] == "active":
+                self.runner(["systemctl", "start", unit], check=False, capture_output=True, text=True)
+
+    def _install_release_assets(self, slot: Path):
+        from .update_assets import SystemdAssetInstaller
+        source = slot / "share" / "bt-signature-detector"
+        if not source.is_dir():
+            return None
+        prior_state = self._wifi_unit_state()
+        snapshot = SystemdAssetInstaller(source, runner=self.runner).install()
+        try:
+            self.runner(["systemctl", "daemon-reload"], check=True, capture_output=True, text=True)
+            self.runner(["systemctl", "disable", "--now", "bt-signature-detector-ap.service",
+                         "bt-signature-detector-dhcp.service", "bt-signature-detector-wifi.service"],
+                        check=False, capture_output=True, text=True)
+            self.runner(["systemctl", "enable", "bt-signature-detector-wifi-mode.service"],
+                        check=True, capture_output=True, text=True)
+            self.runner(["systemctl", "restart", "bt-signature-detector-wifi-mode.service"],
+                        check=True, capture_output=True, text=True)
+            self.runner(["systemctl", "restart", "bt-signature-detector-web.service"],
+                        check=True, capture_output=True, text=True)
+            return (snapshot, prior_state)
+        except Exception:
+            snapshot.rollback()
+            self.runner(["systemctl", "daemon-reload"], check=False, capture_output=True, text=True)
+            self._restore_wifi_unit_state(prior_state)
+            raise
+
+    def _rollback_release_assets(self, snapshot) -> None:
+        if snapshot is None:
+            return
+        files_snapshot, prior_state = snapshot
+        files_snapshot.rollback()
+        self.runner(["systemctl", "daemon-reload"], check=False, capture_output=True, text=True)
+        self._restore_wifi_unit_state(prior_state)
+        self.runner(["systemctl", "restart", "bt-signature-detector.service"], check=False, capture_output=True, text=True)
+        self.runner(["systemctl", "restart", "bt-signature-detector-web.service"], check=False, capture_output=True, text=True)
 
     def stage(self, verified: VerifiedRelease) -> "StagedUpdate":
         from .updates import StagedUpdate
@@ -102,6 +163,7 @@ class UpdateCoordinator:
         slot_name = f"{manifest.version}-{staged_id[:8]}"
         slot = self.releases_dir / slot_name
         if slot.exists(): raise ValueError("release slot already exists")
+        asset_snapshot = None
         try:
             if old is not None and old.is_dir(): shutil.copytree(old, slot, symlinks=True)
             else: slot.mkdir(parents=True)
@@ -112,17 +174,23 @@ class UpdateCoordinator:
             self.runner([str(python), "-m", "pip", "install", "--no-deps", "--force-reinstall", str(stage / "artifact.whl")],
                         check=True, capture_output=True, text=True)
             self._switch_active(slot)
+            asset_snapshot = self._install_release_assets(slot)
             self.runner(["systemctl", "restart", "bt-signature-detector.service"], check=True, capture_output=True, text=True)
             if not self.health_check():
                 self._switch_active(old)
-                self.runner(["systemctl", "restart", "bt-signature-detector.service"], check=False, capture_output=True, text=True)
+                self._rollback_release_assets(asset_snapshot)
+                if asset_snapshot is None:
+                    self.runner(["systemctl", "restart", "bt-signature-detector.service"], check=False, capture_output=True, text=True)
                 return UpdateResult(False, "health check failed; restored the previous release", True, manifest.version)
             shutil.rmtree(stage)
             return UpdateResult(True, "release applied and health check passed", False, manifest.version)
         except Exception as exc:
             if self._get_active() == slot:
                 self._switch_active(old)
+                self._rollback_release_assets(asset_snapshot)
                 self.runner(["systemctl", "restart", "bt-signature-detector.service"], check=False, capture_output=True, text=True)
+                if asset_snapshot is None:
+                    self.runner(["systemctl", "restart", "bt-signature-detector-web.service"], check=False, capture_output=True, text=True)
             if slot.exists(): shutil.rmtree(slot, ignore_errors=True)
             return UpdateResult(False, f"update failed: {exc}", old is not None, manifest.version)
 

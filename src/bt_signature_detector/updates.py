@@ -149,7 +149,7 @@ def verify_manifest(data: bytes, signature: bytes, public_key: Ed25519PublicKey)
     try: public_key.verify(signature, canonical)
     except InvalidSignature as exc: raise ValueError("manifest signature is invalid") from exc
     version = parsed["version"]
-    if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?", version):
+    if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+|[-+][A-Za-z0-9.-]+)?", version):
         raise ValueError("manifest version is invalid")
     url = parsed["artifact_url"]
     try: _require_https(url)

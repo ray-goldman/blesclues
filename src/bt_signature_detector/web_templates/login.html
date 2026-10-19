@@ -1,1 +1,25 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{% if setup %}Set UI password{% else %}Sign in{% endif %} · Bluetooth Detector</title><link rel="stylesheet" href="/static/style.css"></head><body class="auth-page"><main class="auth-card"><span class="mark">B</span><p class="eyebrow">LOCAL ADMINISTRATION</p><h1>{% if setup %}Set a UI password{% else %}Welcome back{% endif %}</h1><p class="muted">This password is separate from the Wi-Fi password.</p><form method="post" action="{% if setup %}/setup{% else %}/login{% endif %}"><label>{% if setup %}Choose password{% else %}UI password{% endif %}<input name="password" type="password" minlength="12" required autocomplete="{% if setup %}new-password{% else %}current-password{% endif %}"></label><button type="submit">{% if setup %}Create password{% else %}Sign in{% endif %}</button></form></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% if setup %}Set password{% else %}Sign in{% endif %} · BLE's Clues</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="auth-page">
+  <main class="auth-card">
+    <a class="brand" href="/" aria-label="BLE's Clues">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="brand-name">BLE's Clues <small>FIELD CONSOLE</small></span>
+    </a>
+    <p class="kicker">LOCAL ADMINISTRATION</p>
+    <h1>{% if setup %}Set your dashboard password{% else %}Sign in{% endif %}</h1>
+    <p>{% if setup %}Create a separate password for this dashboard. It is different from the Wi-Fi password.{% else %}Use your dashboard password. The hotspot password is separate.{% endif %}</p>
+    <form method="post" action="{% if setup %}/setup{% else %}/login{% endif %}">
+      <label>{% if setup %}New dashboard password{% else %}Dashboard password{% endif %}<input name="password" type="password" minlength="12" required autocomplete="{% if setup %}new-password{% else %}current-password{% endif %}"></label>
+      <button class="primary-button" type="submit">{% if setup %}Create password{% else %}Sign in{% endif %}</button>
+    </form>
+  </main>
+  {% include "_build_footer.html" %}
+</body>
+</html>

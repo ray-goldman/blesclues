@@ -1,0 +1,2 @@
+bt-web ALL=(root) NOPASSWD: /usr/local/sbin/bt-detector-device-browser start
+bt-web ALL=(root) NOPASSWD: /usr/local/sbin/bt-detector-device-browser stop

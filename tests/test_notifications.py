@@ -39,6 +39,21 @@ class NotificationsTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(dispatcher.submit(denied))
         await dispatcher.close()
 
+    async def test_threshold_qualified_builtin_event_can_be_notified_without_claiming_confirmation(self):
+        received = []
+        class Notify:
+            async def send(self, item): received.append(item)
+        dispatcher = NotificationDispatcher([Notify()], queue_size=2)
+        await dispatcher.start()
+        item = event(Confidence.POSSIBLE)
+        scored = DetectionEvent(item.signature_id, item.signature_name, item.confidence,
+            item.observed_identifier, item.first_seen, item.last_seen, item.strongest_rssi,
+            item.observation_count, alert_enabled=True, protocol="wifi", vendor="Vendor",
+            base_score=25, correlation_bonus=20, effective_score=45)
+        self.assertTrue(dispatcher.submit(scored))
+        await dispatcher.close()
+        self.assertEqual(received, [scored])
+
     async def test_queue_saturation_is_counted_without_blocking_submit(self):
         gate = asyncio.Event()
         sending = asyncio.Event()

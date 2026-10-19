@@ -1,0 +1,81 @@
+{
+  "version": "2026-10-18",
+  "scoring": {
+    "alert_threshold": 40,
+    "correlation_window_sec": 60,
+    "correlation_bonus": 20,
+    "notes": "Score each hit; add bonus when a BLE and a WiFi hit occur within the window (approach borrowed from flock-you-esp32). Skip locally administered MACs for OUI matching, but still run SSID matching on them."
+  },
+  "signatures": [
+    {
+      "id": "axon_ble_oui",
+      "vendor": "Axon (Taser International)",
+      "protocol": "ble",
+      "match": { "mac_prefix": "00:25:DF" },
+      "device_class": ["body_cam", "holster_sensor", "signal_unit"],
+      "score": 50,
+      "speed_trap_relevance": "high"
+    },
+    {
+      "id": "axon_ble_mfr_string",
+      "vendor": "Axon (Taser International)",
+      "protocol": "ble",
+      "match": { "name_regex": "(?i)taser international" },
+      "score": 40,
+      "speed_trap_relevance": "high"
+    },
+    {
+      "id": "cradlepoint_wifi_oui_1",
+      "vendor": "CradlePoint",
+      "protocol": "wifi",
+      "match": { "bssid_prefix": "00:30:44" },
+      "device_class": ["in_vehicle_lte_router"],
+      "score": 25,
+      "speed_trap_relevance": "medium",
+      "false_positives": ["transit buses", "ambulances", "utility fleets", "retail/kiosks"]
+    },
+    {
+      "id": "cradlepoint_wifi_oui_2",
+      "vendor": "CradlePoint",
+      "protocol": "wifi",
+      "match": { "bssid_prefix": "00:E0:1C" },
+      "device_class": ["in_vehicle_lte_router"],
+      "score": 25,
+      "speed_trap_relevance": "medium",
+      "false_positives": ["transit buses", "ambulances", "utility fleets", "retail/kiosks"]
+    },
+    {
+      "id": "flock_wifi_oui",
+      "vendor": "Flock Safety",
+      "protocol": "wifi",
+      "match": { "mac_prefix": "B4:1E:52" },
+      "device_class": ["alpr_camera"],
+      "score": 40,
+      "speed_trap_relevance": "low"
+    },
+    {
+      "id": "flock_ssid_new",
+      "vendor": "Flock Safety",
+      "protocol": "wifi",
+      "match": { "ssid_regex": "(?i)^flock camera net\\." },
+      "score": 40,
+      "speed_trap_relevance": "low"
+    },
+    {
+      "id": "flock_ssid_legacy",
+      "vendor": "Flock Safety",
+      "protocol": "wifi",
+      "match": { "ssid_regex": "(?i)^flock-[0-9a-f]{6}$" },
+      "score": 40,
+      "speed_trap_relevance": "low"
+    },
+    {
+      "id": "flock_ble_name",
+      "vendor": "Flock Safety",
+      "protocol": "ble",
+      "match": { "name_regex": "(?i)^flock" },
+      "score": 20,
+      "speed_trap_relevance": "low"
+    }
+  ]
+}

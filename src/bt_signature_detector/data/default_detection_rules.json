@@ -1,0 +1,211 @@
+{
+  "scoring": {
+    "alert_threshold": 40,
+    "correlation_window_sec": 60,
+    "correlation_bonus": 20
+  },
+  "rules": [
+    {
+      "rule_id": "axon_ble_mfr_string",
+      "protocol": "ble",
+      "vendor": "Axon (Taser International)",
+      "match_type": "name_regex",
+      "pattern": "(?i)taser international",
+      "confidence": "high",
+      "score": 40,
+      "source": "signatures.json; ble_name_patterns.txt",
+      "notes": "Manufacturer string seen in WiGLE; pair with OUI 00:25:DF",
+      "device_class": [],
+      "relevance": "high",
+      "false_positives": []
+    },
+    {
+      "rule_id": "axon_ble_oui",
+      "protocol": "ble",
+      "vendor": "Axon (Taser International)",
+      "match_type": "mac_prefix",
+      "pattern": "00:25:DF",
+      "confidence": "high",
+      "score": 50,
+      "source": "signatures.json; ouis.csv:https://lemm.ee/post/9157520",
+      "notes": "All Axon gear shares this OUI; also used by corrections and some private security",
+      "device_class": [
+        "body_cam",
+        "holster_sensor",
+        "signal_unit"
+      ],
+      "relevance": "high",
+      "false_positives": []
+    },
+    {
+      "rule_id": "axon_name_regex_i_axon",
+      "protocol": "ble",
+      "vendor": "Axon",
+      "match_type": "name_regex",
+      "pattern": "(?i)^axon",
+      "confidence": "medium",
+      "score": 25,
+      "source": "ble_name_patterns.txt",
+      "notes": "Unverified name prefix; confirm with your own captures",
+      "device_class": [],
+      "relevance": null,
+      "false_positives": []
+    },
+    {
+      "rule_id": "cradlepoint_ssid_regex_i_ibr_cor_r_d_3_4",
+      "protocol": "wifi",
+      "vendor": "Cradlepoint",
+      "match_type": "ssid_regex",
+      "pattern": "(?i)^(IBR|COR|R)\\d{3,4}-",
+      "confidence": "low",
+      "score": 10,
+      "source": "ssid_patterns.txt",
+      "notes": "UNVERIFIED default model-based SSID; many departments rename or hide SSIDs, rely on BSSID OUI",
+      "device_class": [],
+      "relevance": null,
+      "false_positives": []
+    },
+    {
+      "rule_id": "cradlepoint_wifi_oui_1",
+      "protocol": "wifi",
+      "vendor": "CradlePoint",
+      "match_type": "bssid_prefix",
+      "pattern": "00:30:44",
+      "confidence": "medium",
+      "score": 25,
+      "source": "signatures.json; ouis.csv:https://maclookup.app/macaddress/003044",
+      "notes": "Match on BSSID; heavy false positives (buses, ambulances, utility fleets, retail)",
+      "device_class": [
+        "in_vehicle_lte_router"
+      ],
+      "relevance": "medium",
+      "false_positives": [
+        "transit buses",
+        "ambulances",
+        "utility fleets",
+        "retail/kiosks"
+      ]
+    },
+    {
+      "rule_id": "cradlepoint_wifi_oui_2",
+      "protocol": "wifi",
+      "vendor": "CradlePoint",
+      "match_type": "bssid_prefix",
+      "pattern": "00:E0:1C",
+      "confidence": "medium",
+      "score": 25,
+      "source": "signatures.json; ouis.csv:https://maclookup.app/macaddress/00e01c",
+      "notes": "Second Cradlepoint MA-L block; same false-positive caveat",
+      "device_class": [
+        "in_vehicle_lte_router"
+      ],
+      "relevance": "medium",
+      "false_positives": [
+        "transit buses",
+        "ambulances",
+        "utility fleets",
+        "retail/kiosks"
+      ]
+    },
+    {
+      "rule_id": "flock_ble_name",
+      "protocol": "ble",
+      "vendor": "Flock Safety",
+      "match_type": "name_regex",
+      "pattern": "(?i)^flock",
+      "confidence": "medium",
+      "score": 20,
+      "source": "signatures.json; ble_name_patterns.txt",
+      "notes": "From flock-you; Flock BLE beaconing unreliable since spring 2026",
+      "device_class": [],
+      "relevance": "low",
+      "false_positives": []
+    },
+    {
+      "rule_id": "flock_safety_name_regex_i_fs",
+      "protocol": "ble",
+      "vendor": "Flock Safety",
+      "match_type": "name_regex",
+      "pattern": "(?i)^FS_",
+      "confidence": "low",
+      "score": 10,
+      "source": "ble_name_patterns.txt",
+      "notes": "From flock-you; short prefix, false-positive prone",
+      "device_class": [],
+      "relevance": null,
+      "false_positives": []
+    },
+    {
+      "rule_id": "flock_safety_ssid_regex_i_penguin",
+      "protocol": "wifi",
+      "vendor": "Flock Safety",
+      "match_type": "ssid_regex",
+      "pattern": "(?i)^penguin",
+      "confidence": "low",
+      "score": 10,
+      "source": "ssid_patterns.txt",
+      "notes": "From flock-you-esp32; generic word, verify",
+      "device_class": [],
+      "relevance": null,
+      "false_positives": []
+    },
+    {
+      "rule_id": "flock_safety_ssid_regex_i_pigvision",
+      "protocol": "wifi",
+      "vendor": "Flock Safety",
+      "match_type": "ssid_regex",
+      "pattern": "(?i)^pigvision",
+      "confidence": "medium",
+      "score": 25,
+      "source": "ssid_patterns.txt",
+      "notes": "From flock-you-esp32",
+      "device_class": [],
+      "relevance": null,
+      "false_positives": []
+    },
+    {
+      "rule_id": "flock_ssid_legacy",
+      "protocol": "wifi",
+      "vendor": "Flock Safety",
+      "match_type": "ssid_regex",
+      "pattern": "(?i)^flock-[0-9a-f]{6}$",
+      "confidence": "high",
+      "score": 40,
+      "source": "signatures.json; ssid_patterns.txt",
+      "notes": "From flock-you-esp32",
+      "device_class": [],
+      "relevance": "low",
+      "false_positives": []
+    },
+    {
+      "rule_id": "flock_ssid_new",
+      "protocol": "wifi",
+      "vendor": "Flock Safety",
+      "match_type": "ssid_regex",
+      "pattern": "(?i)^flock camera net\\.",
+      "confidence": "high",
+      "score": 40,
+      "source": "signatures.json; ssid_patterns.txt",
+      "notes": "Newer cameras; these use locally administered MACs, so OUI matching misses them",
+      "device_class": [],
+      "relevance": "low",
+      "false_positives": []
+    },
+    {
+      "rule_id": "flock_wifi_oui",
+      "protocol": "wifi",
+      "vendor": "Flock Safety",
+      "match_type": "bssid_prefix",
+      "pattern": "B4:1E:52",
+      "confidence": "high",
+      "score": 40,
+      "source": "signatures.json; ouis.csv:https://simeononsecurity.com/articles/flock-finder-oui-false-positive-audit-2026/",
+      "notes": "Registered directly to Flock; fixed ALPR, not speed enforcement",
+      "device_class": [
+        "alpr_camera"
+      ],
+      "relevance": "low",
+      "false_positives": []
+    }
+  ]
+}

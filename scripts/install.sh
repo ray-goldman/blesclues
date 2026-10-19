@@ -7,6 +7,7 @@ CONFIG_DIR="${CONFIG_DIR:-/etc/bt-signature-detector}"
 STATE_DIR="${STATE_DIR:-/var/lib/bt-signature-detector}"
 SERVICE_USER="bt-detector"
 AP_COUNTRY="${AP_COUNTRY:-}"
+AP_PROFILE="Detector-Admin"
 
 if [[ "${EUID}" -ne 0 ]]; then echo "Run this installer with sudo." >&2; exit 1; fi
 if [[ ! -r /etc/os-release ]]; then echo "Cannot identify operating system." >&2; exit 1; fi
@@ -18,7 +19,7 @@ for tool in apt-get systemctl nmcli python3; do
   command -v "$tool" >/dev/null || { echo "Required command missing: $tool" >&2; exit 1; }
 done
 if [[ ! "$AP_COUNTRY" =~ ^[A-Za-z]{2}$ ]]; then
-  echo "Set your regulatory country before installation, for example: AP_COUNTRY=US sudo -E bash scripts/install.sh" >&2
+  echo "Set your Wi-Fi regulatory country before installation, for example: AP_COUNTRY=US sudo -E bash scripts/install.sh" >&2
   exit 1
 fi
 
@@ -54,6 +55,9 @@ python3 -m venv "$PREFIX/venv.new"
 "$PREFIX/venv.new/bin/pip" install "$ROOT_DIR"
 ln -sfn venv.new "$PREFIX/active.new"
 mv -Tf "$PREFIX/active.new" "$PREFIX/active"
+"$PREFIX/active/bin/python" "$ROOT_DIR/scripts/migrate_hidden_ap_config.py" "$CONFIG_DIR/detector.yaml" "$AP_COUNTRY"
+chown root:"$SERVICE_USER" "$CONFIG_DIR/detector.yaml" "$CONFIG_DIR/signatures.yaml"
+chmod 0660 "$CONFIG_DIR/detector.yaml"
 if [[ ! -e "$STATE_DIR/web/ui-password.hash" ]]; then
   "$PREFIX/active/bin/python" "$ROOT_DIR/scripts/initialize_ui_password.py" "$STATE_DIR/web/ui-password.hash"
   chown bt-web:bt-detector "$STATE_DIR/web/ui-password.hash"
@@ -62,25 +66,34 @@ install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector.service" /etc/systemd/s
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-bluetooth.service" /etc/systemd/system/bt-signature-detector-bluetooth.service
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-dhcp.service" /etc/systemd/system/bt-signature-detector-dhcp.service
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-ap.service" /etc/systemd/system/bt-signature-detector-ap.service
+install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-wifi.service" /etc/systemd/system/bt-signature-detector-wifi.service
+install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-wifi-mode.service" /etc/systemd/system/bt-signature-detector-wifi-mode.service
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-updater@.service" /etc/systemd/system/bt-signature-detector-updater@.service
 install -d -m 0755 /etc/systemd/system/bluetooth.service.d
 install -m 0644 "$ROOT_DIR/systemd/bluetooth.service.d/10-bt-signature-detector.conf" /etc/systemd/system/bluetooth.service.d/10-bt-signature-detector.conf
 install -m 0755 "$ROOT_DIR/scripts/apply_update_helper.sh" /usr/local/sbin/bt-detector-apply-update
 install -m 0755 "$ROOT_DIR/scripts/restart_detector_helper.sh" /usr/local/sbin/bt-detector-restart-scanner
+install -m 0755 "$ROOT_DIR/scripts/device_browser_helper.sh" /usr/local/sbin/bt-detector-device-browser
+install -m 0755 "$ROOT_DIR/scripts/wifi_mode_helper.sh" /usr/local/sbin/bt-detector-wifi-mode
+install -m 0440 "$ROOT_DIR/systemd/bt-signature-detector-device-browser.sudoers" /etc/sudoers.d/bt-signature-detector-device-browser
+visudo -cf /etc/sudoers.d/bt-signature-detector-device-browser >/dev/null
+install -m 0440 "$ROOT_DIR/systemd/bt-signature-detector-wifi-mode.sudoers" /etc/sudoers.d/bt-signature-detector-wifi-mode
+visudo -cf /etc/sudoers.d/bt-signature-detector-wifi-mode >/dev/null
+# Replace the legacy broadcast network with a hidden, disabled-by-default profile.
+systemctl disable --now bt-signature-detector-dhcp.service bt-signature-detector-ap.service 2>/dev/null || true
+nmcli connection delete BLE-Detector >/dev/null 2>&1 || true
 install -m 0440 "$ROOT_DIR/systemd/bt-signature-detector-ap-helper.sudoers" /etc/sudoers.d/bt-signature-detector-ap
 visudo -cf /etc/sudoers.d/bt-signature-detector-ap >/dev/null
-if ! nmcli -t -f NAME connection show | grep -Fxq BLE-Detector; then
-  nmcli connection add type wifi ifname wlan0 con-name BLE-Detector autoconnect no ssid BLE-Detector \
-    802-11-wireless.mode ap 802-11-wireless.band bg 802-11-wireless.channel 6 \
+if ! nmcli -t -f NAME connection show | grep -Fxq "$AP_PROFILE"; then
+  nmcli connection add type wifi ifname wlan0 con-name "$AP_PROFILE" autoconnect no ssid Detector-Admin \
+    802-11-wireless.mode ap 802-11-wireless.band bg 802-11-wireless.channel 6 802-11-wireless.hidden yes \
     802-11-wireless-security.key-mgmt wpa-psk 802-11-wireless-security.proto rsn \
     802-11-wireless-security.pairwise ccmp 802-11-wireless-security.group ccmp \
-    802-11-wireless-security.pmf 1 \
-    802-11-wireless-security.psk easypassword \
+    802-11-wireless-security.pmf 1 802-11-wireless-security.psk easypassword \
     ipv4.method manual ipv4.addresses 192.168.4.1/24 ipv4.never-default yes ipv6.method disabled
 fi
-nmcli connection modify BLE-Detector 802-11-wireless-security.pmf 1
-if [[ ! -e /etc/bt-signature-detector/dnsmasq-ap.conf ]]; then
-cat > /etc/bt-signature-detector/dnsmasq-ap.conf <<'EOF'
+if [[ ! -e "$CONFIG_DIR/dnsmasq-ap.conf" ]]; then
+cat > "$CONFIG_DIR/dnsmasq-ap.conf" <<'EOF'
 interface=wlan0
 bind-interfaces
 port=0
@@ -88,17 +101,20 @@ dhcp-range=192.168.4.20,192.168.4.200,255.255.255.0,12h
 dhcp-option=option:router,192.168.4.1
 EOF
 fi
-chmod 0640 /etc/bt-signature-detector/dnsmasq-ap.conf
-chown root:bt-detector /etc/bt-signature-detector/dnsmasq-ap.conf
+chmod 0640 "$CONFIG_DIR/dnsmasq-ap.conf"
+chown root:bt-detector "$CONFIG_DIR/dnsmasq-ap.conf"
 install -m 0644 "$ROOT_DIR/systemd/bt-signature-detector-web.service" /etc/systemd/system/bt-signature-detector-web.service
 systemctl daemon-reload
+systemctl disable --now bt-signature-detector-ap.service bt-signature-detector-dhcp.service bt-signature-detector-wifi.service 2>/dev/null || true
+systemctl enable --now bt-signature-detector-wifi-mode.service
+systemctl restart bt-signature-detector-wifi-mode.service
 systemctl restart bluetooth.service
 systemctl enable --now bt-signature-detector-bluetooth.service
 systemctl restart bt-signature-detector-bluetooth.service
-systemctl enable --now bt-signature-detector-ap.service
-systemctl enable --now bt-signature-detector-dhcp.service
+systemctl disable bt-signature-detector-ap.service 2>/dev/null || true
 systemctl enable --now bt-signature-detector.service
 systemctl restart bt-signature-detector.service
+systemctl try-restart bt-signature-detector-wifi.service 2>/dev/null || true
 systemctl enable --now bt-signature-detector-web.service
 systemctl restart bt-signature-detector-web.service
 echo "Installed. Configure a device-specific passive bluetooth.or_patterns before expecting detections."

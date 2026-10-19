@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <title>Devices · BLE's Clues</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="BLE's Clues monitor">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="brand-name">BLE's Clues <small>FIELD CONSOLE</small></span>
+    </a>
+    <nav class="navigation" aria-label="Main navigation">
+      <a href="/">Monitor</a><a href="/live">Live Feed</a><a href="/devices" aria-current="page">Devices</a><a href="/watchlists">Watch Lists</a><a href="/settings">Settings</a><a href="/updates">Updates</a>
+    </nav>
+    <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="quiet-button" type="submit">Sign out</button></form>
+  </header>
+  <main class="workspace">
+    <section class="page-heading">
+      <div><p class="kicker">LIVE DEVICE BROWSER</p><h1>Nearby BLE devices</h1><p class="intro-copy">Temporarily broaden discovery and inspect devices that are advertising nearby.</p></div>
+      <div class="connection-state"><span id="browser-state" class="state-tag waiting"><i></i>Checking scanner</span><span id="browser-updated" class="mono quiet-text">Waiting for first update</span></div>
+    </section>
+
+    <section class="device-controls surface">
+      <div>
+        <p class="kicker">SCAN MODE</p>
+        <h2 id="browser-mode">—</h2>
+        <p id="browser-explanation" class="section-note">Active scan requests are used only while browser mode is running. BLE's Clues does not connect to or pair with devices.</p>
+      </div>
+      <div class="browser-actions">
+        <button id="start-browser" class="primary-button" type="button">Start device scan</button>
+        <button id="pause-browser" class="outline-button" type="button" disabled>Pause</button>
+        <button id="stop-browser" class="outline-button" type="button" disabled>Stop and restore filters</button>
+      </div>
+    </section>
+
+    <section class="device-status-rail status-rail" aria-label="Scanner status">
+      <div class="status-cell"><span class="status-label">SCANNER SERVICE</span><strong id="scanner-service">—</strong></div>
+      <div class="status-cell"><span class="status-label">BLE SCANNER</span><strong id="scanner-health">—</strong></div>
+      <div class="status-cell"><span class="status-label">SAVED MODE</span><strong id="saved-mode">—</strong></div>
+      <div class="status-cell"><span class="status-label">DEVICES IN VIEW</span><strong id="device-count">0</strong></div>
+    </section>
+    <p id="scanner-error" class="error-message" role="status"></p>
+
+    <section class="surface device-surface">
+      <div class="section-heading">
+        <div><p class="kicker">VOLATILE INVENTORY</p><h2>Currently observed</h2></div>
+        <span class="privacy-tag">Memory only · addresses may rotate</span>
+      </div>
+      <p class="section-note">Rows are grouped by the exact observed BLE address and expire after the absence interval. No device history is saved.</p>
+      <div class="device-table-wrap">
+        <table class="device-table">
+          <thead><tr><th>Device</th><th>Observed address</th><th>Signal</th><th>First seen</th><th>Last seen</th><th>Manufacturer data</th><th>Service UUIDs</th><th>Service data</th><th></th></tr></thead>
+          <tbody id="device-rows"><tr><td colspan="9" class="empty-state">Start a device scan to see live advertisers.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+    <p id="devices-error" class="error-message" role="status"></p>
+    <div id="device-action-error" class="action-error" role="alert" hidden><p id="device-action-error-text"></p><button id="dismiss-device-error" class="outline-button" type="button">Dismiss</button></div>
+  </main>
+  <dialog id="watch-dialog" class="watch-dialog">
+    <form id="watch-rule-form">
+      <div class="section-heading dialog-heading"><div><p class="kicker">SAVE OBSERVATION</p><h2>Watch this device</h2></div><button id="close-watch" class="quiet-button" type="button">Close</button></div>
+      <p id="watch-address-note" class="address-warning"></p>
+      <label class="field">Rule name<input name="label" maxlength="120" required></label>
+      <label class="field">Watch list<input name="list_name" maxlength="80" list="watch-list-options" required placeholder="Choose or name a list"><datalist id="watch-list-options"></datalist></label>
+      <label class="field">How should criteria combine?<select name="match_mode"><option value="all">All selected criteria</option><option value="any">Any selected criterion</option></select></label>
+      <fieldset class="watch-criteria"><legend>Use these observed characteristics</legend><div id="watch-criteria-options"></div></fieldset>
+      <p class="field-note">Rules need at least three matching observations. They start with notifications off. BLE addresses can rotate.</p>
+      <p id="watch-form-error" class="error-message" role="status"></p>
+      <div class="settings-footer"><button class="primary-button" type="submit">Save rule</button><button id="cancel-watch" class="outline-button" type="button">Cancel</button></div>
+    </form>
+  </dialog>
+  {% include "_build_footer.html" %}
+  <script src="/static/devices.js" defer></script>
+</body>
+</html>

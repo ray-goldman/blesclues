@@ -1,0 +1,7 @@
+# BLE advertised-name / manufacturer-string patterns (case-insensitive regex)
+# format: pattern<TAB>vendor<TAB>confidence<TAB>notes
+
+(?i)taser international	Axon	high	Manufacturer string seen in WiGLE; pair with OUI 00:25:DF
+(?i)^axon	Axon	medium	Unverified name prefix; confirm with your own captures
+(?i)^flock	Flock Safety	medium	From flock-you; Flock BLE beaconing unreliable since spring 2026
+(?i)^FS_	Flock Safety	low	From flock-you; short prefix, false-positive prone

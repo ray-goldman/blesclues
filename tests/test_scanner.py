@@ -1,9 +1,15 @@
 import asyncio
+import json
+from dataclasses import replace
+from pathlib import Path
+import tempfile
 import unittest
 from types import SimpleNamespace
 
 from bt_signature_detector.config import BluetoothConfig, OrPatternConfig
+from bt_signature_detector.scan_mode import effective_bluetooth_config
 from bt_signature_detector.scanner import BleScanner
+from bt_signature_detector.models import Confidence, Signature
 
 
 class FakeBackend:
@@ -16,6 +22,112 @@ class FakeBackend:
 
 
 class ScannerTests(unittest.IsolatedAsyncioTestCase):
+    def test_effective_config_unions_manual_and_derived_filters_once(self):
+        rule = Signature("m", "Manufacturer", Confidence.UNKNOWN, manufacturer_id=76,
+                         manufacturer_pattern=b"\x01", watchlist="List")
+        derived = OrPatternConfig(0, 0xFF, b"L\x00\x01")
+        manual = OrPatternConfig(0, 0xFF, b"manual")
+        with tempfile.TemporaryDirectory() as temp:
+            effective = effective_bluetooth_config(BluetoothConfig(or_patterns=(manual, derived)),
+                override_file=Path(temp) / "none", signatures=(rule,))
+        self.assertEqual(effective.scan_mode, "passive")
+        self.assertEqual(effective.or_patterns, (manual, derived))
+
+    def test_runtime_browser_marker_selects_active_without_blueZ_filters(self):
+        configured = BluetoothConfig(or_patterns=(OrPatternConfig(0, 255, b"\x01\x02"),))
+        with tempfile.TemporaryDirectory() as temp:
+            override = Path(temp) / "device-browser.json"
+            override.write_text(json.dumps({"mode": "active"}))
+
+            effective = effective_bluetooth_config(configured, override_file=override)
+
+        self.assertEqual(effective.scan_mode, "active")
+        self.assertEqual(effective.or_patterns, ())
+        self.assertEqual(configured.scan_mode, "passive")
+        self.assertEqual(len(configured.or_patterns), 1)
+
+    def test_missing_or_malformed_marker_preserves_configured_settings(self):
+        configured = BluetoothConfig(or_patterns=(OrPatternConfig(0, 255, b"\x01"),))
+        with tempfile.TemporaryDirectory() as temp:
+            override = Path(temp) / "device-browser.json"
+            self.assertEqual(effective_bluetooth_config(configured, override_file=override), configured)
+            override.write_text("not json")
+            self.assertEqual(effective_bluetooth_config(configured, override_file=override), configured)
+
+    def test_configured_active_mode_is_preserved_without_browser_marker(self):
+        configured = BluetoothConfig(scan_mode="active", or_patterns=())
+        with tempfile.TemporaryDirectory() as temp:
+            effective = effective_bluetooth_config(configured, override_file=Path(temp) / "missing.json")
+        self.assertEqual(effective, configured)
+
+    async def test_active_scanner_omits_passive_blueZ_filter(self):
+        created = []
+
+        def factory(**kwargs):
+            created.append(FakeBackend(**kwargs))
+            return created[-1]
+
+        scanner = BleScanner(BluetoothConfig(scan_mode="active"), scanner_factory=factory)
+        stop = asyncio.Event()
+        task = asyncio.create_task(scanner.run(lambda _: asyncio.sleep(0), stop))
+        await asyncio.sleep(0.01)
+        stop.set()
+        await task
+        self.assertEqual(created[0].kwargs["scanning_mode"], "active")
+        self.assertNotIn("bluez", created[0].kwargs)
+
+    async def test_scanner_reports_adapter_start_failures_for_dashboard_status(self):
+        statuses = []
+
+        class FailingBackend(FakeBackend):
+            async def start(self): raise RuntimeError("adapter unavailable")
+
+        scanner = BleScanner(BluetoothConfig(scan_mode="active"),
+            scanner_factory=lambda **kwargs: FailingBackend(**kwargs),
+            reconnect_initial_seconds=0.01, reconnect_max_seconds=0.01)
+        stop = asyncio.Event()
+        task = asyncio.create_task(scanner.run(lambda _: asyncio.sleep(0), stop,
+            status_callback=statuses.append))
+        await asyncio.sleep(0.02)
+        stop.set()
+        await task
+
+        self.assertTrue(any(status.get("state") == "error" and "adapter unavailable" in status.get("error", "")
+            for status in statuses))
+
+    async def test_scanner_preserves_platform_address_type(self):
+        class ReportingBackend(FakeBackend):
+            async def start(self):
+                callback = self.kwargs["detection_callback"]
+                callback(SimpleNamespace(address="aa", name="Beacon", address_type="random", rssi=-60),
+                    SimpleNamespace(manufacturer_data={}, service_data={}, service_uuids=(), rssi=-59))
+        scanner = BleScanner(BluetoothConfig(scan_mode="active"),
+            scanner_factory=lambda **kwargs: ReportingBackend(**kwargs))
+        received = []
+        stop = asyncio.Event()
+        task = asyncio.create_task(scanner.run(lambda item: _append(received, item), stop))
+        await asyncio.sleep(0.01)
+        stop.set()
+        await task
+        self.assertEqual(received[0].address_type, "random")
+
+    async def test_sync_detection_pipeline_callback_is_not_scheduled_as_coroutine(self):
+        processed = []
+        stop = asyncio.Event()
+
+        class SingleAdvertisementBackend(FakeBackend):
+            async def start(self):
+                stop.set()
+                self.kwargs["detection_callback"](
+                    SimpleNamespace(address="aa", name="Beacon", rssi=-60),
+                    SimpleNamespace(manufacturer_data={}, service_data={}, service_uuids=(), rssi=-59))
+
+        scanner = BleScanner(BluetoothConfig(scan_mode="active"),
+            scanner_factory=lambda **kwargs: SingleAdvertisementBackend(**kwargs))
+        with self.assertNoLogs("bt_signature_detector.scanner", level="ERROR"):
+            await scanner.run(lambda item: processed.append(item) or [], stop)
+        self.assertEqual(len(processed), 1)
+
     async def test_passive_or_patterns_and_advertisement_normalization(self):
         created = []
         def factory(**kwargs):

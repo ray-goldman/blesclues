@@ -1,9 +1,72 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="csrf-token" content="{{ csrf }}"><title>Bluetooth Detector</title><link rel="stylesheet" href="/static/style.css"></head>
-<body><header><div class="brand"><span class="mark">B</span><div><strong>Bluetooth Detector</strong><small>Local control panel</small></div></div><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="ghost">Sign out</button></form></header>
-<main><section class="hero"><div><p class="eyebrow">DEVICE OVERVIEW</p><h1>Scanner status</h1><p class="muted">Passive advertisement monitoring and recent signature matches.</p></div><span id="state" class="pill">Connecting…</span></section>
-<section class="cards"><article><span>Scanner</span><strong id="scanner">—</strong></article><article><span>Bluetooth mode</span><strong id="mode">—</strong></article><article><span>Recent detections</span><strong id="count">—</strong></article><article><span>Wi-Fi network</span><strong>BLE-Detector</strong></article></section>
-<section class="grid"><article class="panel"><div class="panel-head"><div><p class="eyebrow">MATCHES</p><h2>Recent detections</h2></div><button id="refresh" class="secondary">Refresh</button></div><div id="events" class="rows"><p class="empty">No detections yet.</p></div></article>
-<article class="panel"><div class="panel-head"><div><p class="eyebrow">LIVE BUFFER</p><h2>Nearby advertisements</h2></div><span class="small muted">Identifiers hidden</span></div><div id="scans" class="rows"><p class="empty">No live observations available.</p></div></article></section>
-<section class="panel settings"><div class="panel-head"><div><p class="eyebrow">SETTINGS</p><h2>Configuration</h2></div></div><p class="muted">Use the settings form to update scan thresholds, notification options, and Wi-Fi access point details.</p><a class="secondary link" href="/settings">Open settings</a> <a class="secondary link" href="/updates">Software updates</a></section>
-<p id="error" class="error" role="status"></p></main><script src="/static/app.js" defer></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <title>Monitor · BLE's Clues</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="BLE's Clues monitor">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="brand-name">BLE's Clues <small>FIELD CONSOLE</small></span>
+    </a>
+    <nav class="navigation" aria-label="Main navigation">
+      <a href="/" aria-current="page">Monitor</a>
+      <a href="/live">Live Feed</a>
+      <a href="/devices">Devices</a>
+      <a href="/watchlists">Watch Lists</a>
+      <a href="/settings">Settings</a>
+      <a href="/updates">Updates</a>
+    </nav>
+    <form method="post" action="/logout">
+      <input type="hidden" name="csrf_token" value="{{ csrf }}">
+      <button class="quiet-button" type="submit">Sign out</button>
+    </form>
+  </header>
+  <main class="workspace">
+    <section class="page-heading">
+      <div>
+        <p id="scan-kicker" class="kicker">LIVE MONITOR <span>·</span> SCAN MODE</p>
+        <h1>Detection activity</h1>
+        <p class="intro-copy">Scored BLE and Wi-Fi indicators, with the rules and source notes behind each record.</p>
+      </div>
+      <div class="connection-state">
+        <span id="state" class="state-tag waiting"><i></i>Checking connection</span>
+        <span id="updated" class="mono quiet-text">Waiting for first update</span>
+      </div>
+    </section>
+
+    <section class="status-rail" aria-label="Device status">
+      <div class="status-cell"><span class="status-label">SCANNER</span><strong id="scanner">—</strong></div>
+      <div class="status-cell"><span class="status-label">SCAN MODE</span><strong id="mode">—</strong></div>
+      <div class="status-cell"><span class="status-label">MATCHES SHOWN</span><strong id="count">—</strong><small>Most recent records</small></div>
+      <div class="status-cell"><span class="status-label">WI-FI RADIO</span><strong id="ap">—</strong><small>Scan or hotspot</small></div>
+    </section>
+
+    <section class="monitor-grid">
+      <article class="surface match-surface">
+        <div class="section-heading">
+          <div><p class="kicker">SIGNATURE LOG</p><h2>Recent matches</h2></div>
+          <button id="refresh" class="outline-button" type="button">Refresh</button>
+        </div>
+        <p class="section-note">A record appears after a signature meets its observation threshold.</p>
+        <div id="events" class="record-list" aria-live="polite"><p class="empty-state">Loading match records…</p></div>
+      </article>
+
+    </section>
+
+    <section class="operator-links" aria-label="Operator tasks">
+      <a href="/devices"><span class="task-index">01</span><span><strong>Device browser</strong><small>Temporarily scan nearby BLE advertisers</small></span><b aria-hidden="true">→</b></a>
+      <a href="/watchlists"><span class="task-index">02</span><span><strong>Watch Lists</strong><small>Rules saved from observed devices</small></span><b aria-hidden="true">→</b></a>
+      <a href="/settings"><span class="task-index">03</span><span><strong>Detection &amp; access</strong><small>Thresholds and hidden hotspot</small></span><b aria-hidden="true">→</b></a>
+      <a href="/updates"><span class="task-index">04</span><span><strong>Release management</strong><small>Check feed or upload a signed build</small></span><b aria-hidden="true">→</b></a>
+    </section>
+    <p id="error" class="error-message" role="status"></p>
+  </main>
+  {% include "_build_footer.html" %}
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

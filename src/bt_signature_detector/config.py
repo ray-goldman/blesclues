@@ -87,13 +87,20 @@ class NotificationConfig:
 
 @dataclass(frozen=True, slots=True)
 class AccessPointConfig:
-    enabled: bool = True
-    ssid: str = "BLE-Detector"
+    enabled: bool = False
+    ssid: str = "Detector-Admin"
     passphrase: str = "easypassword"
     interface_address: str = "192.168.4.1/24"
     country: str = ""
     channel: int = 6
-    profile_name: str = "BLE-Detector"
+    profile_name: str = "Detector-Admin"
+    hidden: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class WifiScanningConfig:
+    enabled: bool = False
+    interval_seconds: int = 15
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +129,7 @@ class AppConfig:
     logging: LoggingConfig = LoggingConfig()
     notifications: NotificationConfig = NotificationConfig()
     access_point: AccessPointConfig = AccessPointConfig()
+    wifi_scanning: WifiScanningConfig = WifiScanningConfig()
     web: WebConfig = WebConfig()
     updates: UpdateConfig = UpdateConfig()
     schema_version: int = 1
@@ -162,9 +170,9 @@ def _bool(value: object, path: str) -> bool:
     return value
 
 
-def validate_config_data(data: Mapping[str, object]) -> AppConfig:
+def validate_config_data(data: Mapping[str, object], *, base_dir: Path | None = None) -> AppConfig:
     root = _mapping(data, "config")
-    root_unknown = set(root) - {"schema_version", "bluetooth", "detection", "storage", "logging", "notifications", "access_point", "web", "updates"}
+    root_unknown = set(root) - {"schema_version", "bluetooth", "detection", "storage", "logging", "notifications", "access_point", "wifi_scanning", "web", "updates"}
     if root_unknown:
         raise ValueError(f"{sorted(root_unknown)[0]} is not a supported setting")
     version = root.get("schema_version", 1)
@@ -195,8 +203,6 @@ def validate_config_data(data: Mapping[str, object]) -> AppConfig:
             _int(item.get("ad_data_type"), f"bluetooth.or_patterns[{index}].ad_data_type", minimum=1, maximum=255),
             content,
         ))
-    if scan_mode == "passive" and not patterns:
-        raise ValueError("bluetooth.or_patterns is required for passive scanning")
     adapter = b.get("adapter")
     if adapter is not None and (not isinstance(adapter, str) or not adapter.strip()):
         raise ValueError("bluetooth.adapter must be a non-empty string or null")
@@ -214,6 +220,18 @@ def validate_config_data(data: Mapping[str, object]) -> AppConfig:
         min_observations=_int(d.get("min_observations", 3), "detection.min_observations", minimum=3, maximum=100000),
         signature_file=Path(d.get("signature_file", "signatures.yaml")),
     )
+    if scan_mode == "passive" and not patterns:
+        signature_path = detection.signature_file
+        if not signature_path.is_absolute() and base_dir is not None:
+            signature_path = Path(base_dir) / signature_path
+        try:
+            from .signatures import load_signatures
+            from .watch_filters import derived_watch_filters
+            derived = derived_watch_filters(load_signatures(signature_path))
+        except (OSError, ValueError):
+            derived = ()
+        if not derived:
+            raise ValueError("bluetooth.or_patterns is required for passive scanning")
 
     s = _section(root, "storage", {"path", "retention_days", "max_events"})
     storage = StorageConfig(
@@ -270,8 +288,8 @@ def validate_config_data(data: Mapping[str, object]) -> AppConfig:
         ),
     )
 
-    ap = _section(root, "access_point", {"enabled", "ssid", "passphrase", "interface_address", "country", "channel", "profile_name"})
-    ssid = ap.get("ssid", "BLE-Detector")
+    ap = _section(root, "access_point", {"enabled", "ssid", "passphrase", "interface_address", "country", "channel", "profile_name", "hidden"})
+    ssid = ap.get("ssid", "Detector-Admin")
     passphrase = ap.get("passphrase", "easypassword")
     if not isinstance(ssid, str) or not 1 <= len(ssid.encode("utf-8")) <= 32:
         raise ValueError("access_point.ssid must be 1 to 32 UTF-8 bytes")
@@ -281,14 +299,24 @@ def validate_config_data(data: Mapping[str, object]) -> AppConfig:
     if not isinstance(country, str) or len(country) not in {0, 2}:
         raise ValueError("access_point.country must be an ISO 3166-1 alpha-2 code")
     access_point = AccessPointConfig(
-        enabled=_bool(ap.get("enabled", True), "access_point.enabled"),
+        enabled=_bool(ap.get("enabled", False), "access_point.enabled"),
         ssid=ssid,
         passphrase=passphrase,
         interface_address=str(ap.get("interface_address", "192.168.4.1/24")),
         country=country.upper(),
         channel=_int(ap.get("channel", 6), "access_point.channel", minimum=1, maximum=13),
-        profile_name=str(ap.get("profile_name", "BLE-Detector")),
+        profile_name=str(ap.get("profile_name", "Detector-Admin")),
+        hidden=_bool(ap.get("hidden", True), "access_point.hidden"),
     )
+
+    wifi_scan_raw = _section(root, "wifi_scanning", {"enabled", "interval_seconds"})
+    wifi_scanning = WifiScanningConfig(
+        enabled=_bool(wifi_scan_raw.get("enabled", False), "wifi_scanning.enabled"),
+        interval_seconds=_int(wifi_scan_raw.get("interval_seconds", 15),
+                               "wifi_scanning.interval_seconds", minimum=10, maximum=3600),
+    )
+    if access_point.enabled and wifi_scanning.enabled:
+        raise ValueError("access_point.enabled and wifi_scanning.enabled cannot both be true")
 
     w = _section(root, "web", {"enabled", "port", "password_hash_file", "session_key_file", "max_live_scans"})
     web = WebConfig(
@@ -320,6 +348,7 @@ def validate_config_data(data: Mapping[str, object]) -> AppConfig:
         logging=logging_config,
         notifications=notifications,
         access_point=access_point,
+        wifi_scanning=wifi_scanning,
         web=web,
         updates=updates,
         schema_version=version,
@@ -335,6 +364,6 @@ def load_app_config(path: Path) -> AppConfig:
     if data is None:
         raise ValueError(f"{path}: configuration is empty")
     try:
-        return validate_config_data(_mapping(data, str(path)))
+        return validate_config_data(_mapping(data, str(path)), base_dir=path.resolve().parent)
     except ValueError as exc:
         raise ValueError(f"{path}: {exc}") from exc

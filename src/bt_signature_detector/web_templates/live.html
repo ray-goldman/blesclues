@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf }}">
+  <title>Live Feed · BLE's Clues</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="BLE's Clues monitor"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span class="brand-name">BLE's Clues <small>FIELD CONSOLE</small></span></a>
+    <nav class="navigation" aria-label="Main navigation">
+      <a href="/">Monitor</a><a href="/live" aria-current="page">Live Feed</a><a href="/devices">Devices</a><a href="/watchlists">Watch Lists</a><a href="/settings">Settings</a><a href="/updates">Updates</a>
+    </nav>
+    <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="quiet-button" type="submit">Sign out</button></form>
+  </header>
+  <main class="workspace">
+    <section class="page-heading"><div><p class="kicker">VOLATILE RADIO WINDOW</p><h1>Live Feed</h1><p class="intro-copy">Recent BLE advertisements and optional Wi-Fi network sightings, kept in temporary memory.</p></div><div class="connection-state"><span id="feed-state" class="state-tag waiting"><i></i>Waiting for scan data</span><span id="feed-updated" class="mono quiet-text">No update yet</span></div></section>
+    <section class="feed-toolbar"><div><strong id="feed-count">— BLE observations</strong><span> · newest first</span></div><span class="privacy-tag">Raw scans are temporary · matches enter history</span></section>
+    <p class="feed-explainer">Raw observations clear when the service stops or the Pi restarts. Only detections that meet the configured score threshold enter event history. To inspect current BLE devices during a temporary broad scan, use <a href="/devices">Devices</a>.</p>
+    <section class="surface feed-surface"><div class="feed-table-wrap"><table class="feed-table"><thead><tr><th>Observed name</th><th>Signal</th><th>Seen</th><th>Manufacturer data</th></tr></thead><tbody id="feed-rows"><tr><td colspan="4" class="empty-state">Waiting for advertisements…</td></tr></tbody></table></div></section>
+    <section class="section-heading feed-wifi-heading"><div><p class="kicker">OPTIONAL WI-FI SCAN</p><h2>Nearby networks</h2></div><span id="wifi-scan-state" class="state-tag waiting"><i></i>Checking radio</span></section>
+    <section class="surface feed-surface"><div class="feed-table-wrap"><table class="feed-table"><thead><tr><th>Network name</th><th>BSSID</th><th>Signal</th><th>Channel</th><th>Security</th><th>Seen</th></tr></thead><tbody id="wifi-rows"><tr><td colspan="6" class="empty-state">Wi-Fi scanning is off.</td></tr></tbody></table></div></section>
+    <p id="feed-error" class="error-message" role="status"></p>
+  </main>
+  {% include "_build_footer.html" %}
+  <script src="/static/live.js" defer></script>
+</body>
+</html>

@@ -23,6 +23,7 @@ class Advertisement:
     service_data: Mapping[str, bytes] = field(default_factory=dict)
     rssi: int | None = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    address_type: str | None = None
 
     def __post_init__(self) -> None:
         if self.timestamp.tzinfo is None or self.timestamp.utcoffset() is None:
@@ -51,11 +52,17 @@ class Signature:
     match_mode: str = "all"
     evidence: str = ""
     alert_enabled: bool = False
+    watchlist: str | None = None
+    enabled: bool = True
+    identifier_prefixes: tuple[str, ...] = ()
+    manufacturer_ids: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "service_uuids", tuple(self.service_uuids))
         object.__setattr__(self, "service_data", MappingProxyType(dict(self.service_data)))
         object.__setattr__(self, "exact_identifiers", tuple(self.exact_identifiers))
+        object.__setattr__(self, "identifier_prefixes", tuple(self.identifier_prefixes))
+        object.__setattr__(self, "manufacturer_ids", tuple(self.manufacturer_ids))
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +82,15 @@ class DetectionEvent:
     observation_count: int
     event_id: str = field(default_factory=lambda: str(uuid4()))
     alert_enabled: bool = False
+    watchlist_name: str | None = None
+    protocol: str | None = None
+    vendor: str | None = None
+    base_score: int | None = None
+    correlation_bonus: int | None = None
+    effective_score: int | None = None
+    source_note: str | None = None
+    observed_name: str | None = None
+    observed_ssid: str | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("first_seen", "last_seen"):

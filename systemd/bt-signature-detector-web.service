@@ -1,7 +1,7 @@
 [Unit]
 Description=Bluetooth Signature Detector local web interface
-After=NetworkManager.service bt-signature-detector-ap.service
-Wants=bt-signature-detector-ap.service
+After=NetworkManager.service bt-signature-detector-wifi-mode.service network-online.target
+Wants=network-online.target bt-signature-detector-wifi-mode.service
 
 [Service]
 Type=simple
@@ -12,15 +12,17 @@ WorkingDirectory=/var/lib/bt-signature-detector
 ExecStart=/opt/bt-signature-detector/active/bin/python -m bt_signature_detector.web --config /etc/bt-signature-detector/detector.yaml
 Restart=on-failure
 RestartSec=5
+LogRateLimitIntervalSec=30s
+LogRateLimitBurst=100
 NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-RuntimeDirectory=bt-signature-detector
+RuntimeDirectory=bt-signature-detector bt-signature-detector-web
 RuntimeDirectoryMode=0770
 RuntimeDirectoryPreserve=yes
 ReadOnlyPaths=/run/bt-signature-detector
-ReadWritePaths=/var/lib/bt-signature-detector /etc/bt-signature-detector
+ReadWritePaths=/var/lib/bt-signature-detector /etc/bt-signature-detector /run/bt-signature-detector-web
 StandardOutput=journal
 StandardError=journal
 

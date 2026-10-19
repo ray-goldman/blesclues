@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
-from typing import Awaitable, Callable
+from typing import Callable
 
 from .config import BluetoothConfig
 from .models import Advertisement
@@ -39,9 +40,18 @@ class BleScanner:
             kwargs["bluez"] = {"or_patterns": [(p.start_position, p.ad_data_type, p.pattern) for p in self.config.or_patterns]}
         return factory(**kwargs)
 
-    async def run(self, on_advertisement: Callable[[Advertisement], Awaitable[None]], stop_event: asyncio.Event) -> None:
+    async def run(self, on_advertisement: Callable[[Advertisement], object],
+                  stop_event: asyncio.Event,
+                  status_callback: Callable[[dict], None] | None = None) -> None:
         loop = asyncio.get_running_loop()
         pending: set[asyncio.Task] = set()
+
+        def report(state: str, error: str | None = None) -> None:
+            if status_callback is not None:
+                try:
+                    status_callback({"state": state, "error": error[:256] if error else None})
+                except Exception:
+                    logger.warning("scanner status callback failed", exc_info=True)
 
         def callback(device, adv):
             manufacturer_data = dict(getattr(adv, "manufacturer_data", {}) or {})
@@ -53,24 +63,33 @@ class BleScanner:
                 service_uuids=tuple(getattr(adv, "service_uuids", ()) or ()),
                 service_data={str(k): bytes(v) for k, v in service_data.items()},
                 rssi=getattr(adv, "rssi", getattr(device, "rssi", None)),
+                address_type=getattr(device, "address_type", None),
             )
-            task = loop.create_task(on_advertisement(item))
-            pending.add(task)
-            task.add_done_callback(pending.discard)
-            task.add_done_callback(lambda t: logger.error("advertisement callback failed", exc_info=t.exception()) if not t.cancelled() and t.exception() else None)
+            try:
+                result = on_advertisement(item)
+                if inspect.isawaitable(result):
+                    task = loop.create_task(result)
+                    pending.add(task)
+                    task.add_done_callback(pending.discard)
+                    task.add_done_callback(lambda t: logger.error("advertisement callback failed", exc_info=t.exception()) if not t.cancelled() and t.exception() else None)
+            except Exception:
+                logger.exception("advertisement callback failed")
 
         delay = self.initial_delay
         while not stop_event.is_set():
             backend = None
             try:
                 backend = self._factory(callback)
+                report("starting")
                 await backend.start()
+                report("scanning")
                 delay = self.initial_delay
                 await stop_event.wait()
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                logger.exception("BLE scanner failed; retrying in %.1f seconds", delay)
+            except Exception as exc:
+                report("error", str(exc))
+                logger.error("BLE scanner failed; retrying in %.1f seconds: %s", delay, exc)
             finally:
                 if backend is not None:
                     try:
@@ -85,3 +104,4 @@ class BleScanner:
                 delay = min(self.max_delay, delay * 2)
         if pending:
             await asyncio.gather(*pending, return_exceptions=True)
+        report("stopped")

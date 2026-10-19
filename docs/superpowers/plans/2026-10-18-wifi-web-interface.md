@@ -1,21 +1,23 @@
 # Wi-Fi Access Point and Web Interface Implementation Plan
 
+> **Approved design revision (2026-10-18):** Replace the old broadcast `BLE-Detector` network with a hidden optional `Detector-Admin` AP, disabled by default, with initial password `easypassword`. It has no internet forwarding. Admin UI access remains password-protected and available on both Ethernet and AP. The UI is refreshed to a clean operations console. Routine scans remain in memory; service journal output is rate-limited for SD-card durability. Notes below are historical where they conflict with this revision.
+
 > **For agentic workers:** Required sub-skill: use `superpowers:executing-plans` to implement this plan task by task. Do not begin implementation until the user approves the plan and selects an execution method.
 
-**Goal:** Provide a Pi-hosted Wi-Fi network and authenticated local UI for scanner status, live/recent output, and safe configuration edits.
+**Goal:** Provide an authenticated local UI for scanner status, live/recent output, safe configuration edits, an optional hidden AP, and software updates over Ethernet or the AP.
 
-**Architecture:** NetworkManager owns a local-only AP. A Flask/Waitress UI binds only to its interface, requires a separately created UI password, and calls a narrow AP helper for whitelisted network changes. Live observations remain bounded in memory.
+**Architecture:** A Flask/Waitress UI binds to Ethernet and the local AP address, requires a separately created UI password, and allows only whitelisted detector/update changes. The hidden AP is off by default and can be controlled in Settings. Live observations remain bounded in memory.
 
-**Tech Stack:** NetworkManager/nmcli, Python Flask and Waitress, same-origin HTML/JS/CSS, `unittest`.
+**Tech Stack:** NetworkManager, Python Flask and Waitress, same-origin HTML/JS/CSS, `unittest`.
 
 **Spec:** [2026-10-18-raspberry-pi-ble-signature-detector-design.md](../specs/2026-10-18-raspberry-pi-ble-signature-detector-design.md)
 
 ## Global Constraints
 
-- AP defaults: SSID `BLE-Detector`, WPA2 passphrase `easypassword`, interface address `192.168.4.1`.
-- AP is local-only and does not require internet; regulatory country is configured before start.
+- The installer replaces the legacy `BLE-Detector` network with the hidden `Detector-Admin` profile, disabled by default.
+- The dashboard remains reachable on Ethernet and on the optional hidden AP when enabled.
 - UI has mandatory separate password setup, password hashing, CSRF protection, and no password echo.
-- UI binds only to AP interface; no arbitrary shell/config-file execution.
+- UI binds only to the configured Ethernet and AP addresses; no arbitrary shell/config-file execution.
 - Ordinary scan output is bounded in memory and never stored as a durable device inventory.
 
 ## Review Focus
@@ -40,7 +42,7 @@
 **Interfaces:**
 - Consumes NetworkManager and AP config from the operations plan.
 - Produces `AccessPointStatus.read() -> AccessPointStatus`, `AccessPointClient.update(profile: str, changes: ApSettings) -> None`, and a local IPC helper accepting only SSID, WPA2 passphrase, channel, and country for the fixed detector AP profile.
-- Defaults to SSID `BLE-Detector`, passphrase `easypassword`, local address `192.168.4.1/24`, and no forwarding/bridging.
+- Approved design defaults to SSID `Detector-Admin`, passphrase `easypassword`, hidden and disabled, at `192.168.4.1/24`, with no forwarding/bridging.
 
 - [ ] **Step 1: Write failing helper tests** for allowed field changes, rejected profile names/unlisted options, secret redaction, AP status failures, and non-destructive install config.
 - [ ] **Step 2: Run** `python -m unittest tests.test_ap_helper -v`; confirm restricted helper behavior is absent.
