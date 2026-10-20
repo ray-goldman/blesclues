@@ -11,7 +11,7 @@ class SystemdAssetInstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "share" / "bt-signature-detector"
-            systemd = root / "etc" / "systemd"
+            systemd = root / "etc" / "systemd" / "system"
             sbin = root / "usr" / "local" / "sbin"
             for relative in SystemdAssetInstaller.ASSETS:
                 source_path = source / relative
@@ -25,7 +25,7 @@ class SystemdAssetInstallerTests(unittest.TestCase):
                              "asset: systemd/bt-signature-detector-wifi.service")
             self.assertEqual((sbin / "bt-detector-wifi-mode").read_text(),
                              "asset: scripts/wifi_mode_helper.sh")
-            sudoers = systemd.parent / "sudoers.d" / "bt-signature-detector-wifi-mode"
+            sudoers = root / "etc" / "sudoers.d" / "bt-signature-detector-wifi-mode"
             self.assertTrue(sudoers.exists())
             if os.name != "nt":
                 self.assertEqual((sudoers.stat().st_mode & 0o777), 0o440)
