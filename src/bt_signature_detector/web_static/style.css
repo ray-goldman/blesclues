@@ -203,33 +203,27 @@ h2 { margin: 0; font-size: 15px; line-height: 1.25; letter-spacing: -.02em; font
 .browser-actions button:disabled { opacity: .48; cursor: not-allowed; }
 .device-status-rail { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 14px; }
 .device-surface { margin-top: 14px; border-top: 2px solid var(--blue); }
-.device-table-wrap { overflow-x: auto; padding: 0 18px 15px; }
-.device-table { width: 100%; min-width: 1120px; border-collapse: collapse; text-align: left; }
+.device-table-wrap { overflow: visible; padding: 0 14px 14px; }
+.device-table, .device-table tbody { display: block; width: 100%; min-width: 0; }
+.device-table { border-collapse: collapse; text-align: left; }
+.device-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.device-table tbody { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.device-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; min-width: 0; border: 1px solid var(--line); border-top: 2px solid var(--blue); background: #fff; }
+.device-table tr.empty-row { grid-column: 1 / -1; }
 .device-table th, .device-table td { padding: 11px 9px; border-top: 1px solid #e9ede7; vertical-align: top; }
 .device-table th { color: var(--muted); font: 9px var(--mono); letter-spacing: .035em; white-space: nowrap; }
-.device-table td { color: #435047; font-size: 10px; line-height: 1.45; }
+.device-table td { min-width: 0; padding: 9px 10px; border-top: 1px solid #e9ede7; color: #435047; font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.device-table td::before { display: block; margin-bottom: 4px; color: var(--muted); content: attr(data-label); font: 8px var(--mono); letter-spacing: .025em; text-transform: uppercase; }
+.device-table td:first-child, .device-table td:last-child { grid-column: 1 / -1; }
+.device-table td:first-child { border-top: 0; }
+.device-table td:last-child { text-align: right; }
 .device-table td strong { color: var(--ink); font-size: 10px; font-weight: 650; }
 .device-table td small { display: block; color: var(--muted); font: 8px var(--mono); }
 .address-cell, .data-cell { font-size: 9px !important; overflow-wrap: anywhere; }
-.device-table .empty-state { padding: 18px 9px; color: #7b867d; font-size: 10px; }
+.device-table .empty-state { grid-column: 1 / -1; padding: 18px 9px; color: #7b867d; font-size: 10px; }
 .build-footer { display: flex; justify-content: space-between; gap: 14px; max-width: 1220px; margin: 0 auto; padding: 14px 24px 22px; border-top: 1px solid var(--line); color: var(--muted); font: 9px var(--mono); letter-spacing: .02em; }
 .error-message { color: var(--red); font-size: 10px; line-height: 1.5; }
 main > .error-message:empty { display: none; }
-
-@media (max-width: 1800px) {
-  .device-table-wrap { overflow: visible; padding: 0 14px 14px; }
-  .device-table, .device-table tbody { display: block; width: 100%; min-width: 0; }
-  .device-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-  .device-table tbody { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  .device-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; min-width: 0; border: 1px solid var(--line); border-top: 2px solid var(--blue); background: #fff; }
-  .device-table tr.empty-row { grid-column: 1 / -1; }
-  .device-table td { min-width: 0; padding: 9px 10px; border-top: 1px solid #e9ede7; overflow-wrap: anywhere; }
-  .device-table td::before { display: block; margin-bottom: 4px; color: var(--muted); content: attr(data-label); font: 8px var(--mono); letter-spacing: .025em; text-transform: uppercase; }
-  .device-table td:first-child, .device-table td:last-child { grid-column: 1 / -1; }
-  .device-table td:first-child { border-top: 0; }
-  .device-table td:last-child { text-align: right; }
-  .device-table .empty-state { grid-column: 1 / -1; }
-}
 
 @media (max-width: 620px) {
   .device-table tbody { grid-template-columns: minmax(0, 1fr); }
