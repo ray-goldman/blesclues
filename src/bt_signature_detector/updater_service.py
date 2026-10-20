@@ -220,7 +220,7 @@ def main(argv=None):
     bundle_path = Path("/var/lib/bt-signature-detector/web/updates") / f"{args.id}.zip"
     try:
         if bundle_path.is_symlink(): raise ValueError("staged bundle must not be a symbolic link")
-        verifier = UpdateVerifier(_load_public_key(Path("/etc/bt-signature-detector/update.pub")))
+        verifier = UpdateVerifier(_load_public_key(Path("/etc/bt-signature-detector-trust/update.pub")))
         verified = verifier.verify_bundle(bundle_path)
         coordinator = UpdateCoordinator()
         staged = coordinator.stage(verified)

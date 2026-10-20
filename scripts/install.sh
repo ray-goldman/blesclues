@@ -4,10 +4,12 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PREFIX="${PREFIX:-/opt/bt-signature-detector}"
 CONFIG_DIR="${CONFIG_DIR:-/etc/bt-signature-detector}"
+TRUST_DIR="${TRUST_DIR:-/etc/bt-signature-detector-trust}"
 STATE_DIR="${STATE_DIR:-/var/lib/bt-signature-detector}"
 SERVICE_USER="bt-detector"
 AP_COUNTRY="${AP_COUNTRY:-}"
 AP_PROFILE="Detector-Admin"
+UPDATE_PUBLIC_KEY="${UPDATE_PUBLIC_KEY:-}"
 
 if [[ "${EUID}" -ne 0 ]]; then echo "Run this installer with sudo." >&2; exit 1; fi
 if [[ ! -r /etc/os-release ]]; then echo "Cannot identify operating system." >&2; exit 1; fi
@@ -32,6 +34,11 @@ id -u bt-web >/dev/null 2>&1 || useradd --system --home-dir "$STATE_DIR/web" --n
 usermod -a -G bt-detector bt-web
 install -d -o root -g "$SERVICE_USER" -m 0750 "$PREFIX"
 install -d -o root -g "$SERVICE_USER" -m 0770 "$CONFIG_DIR"
+install -d -o root -g root -m 0755 "$TRUST_DIR"
+if [[ -n "$UPDATE_PUBLIC_KEY" ]]; then
+  if [[ ! -r "$UPDATE_PUBLIC_KEY" ]]; then echo "Update public key is not readable: $UPDATE_PUBLIC_KEY" >&2; exit 1; fi
+  install -o root -g root -m 0644 "$UPDATE_PUBLIC_KEY" "$TRUST_DIR/update.pub"
+fi
 install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 0750 "$STATE_DIR"
 install -d -o bt-web -g bt-detector -m 0750 "$STATE_DIR/web"
 if [[ ! -e "$CONFIG_DIR/environment" ]]; then install -m 0600 /dev/null "$CONFIG_DIR/environment"; fi

@@ -6,7 +6,16 @@ Checking and staging do not install a release. To install one, review its versio
 
 ## Trust key and release signing
 
-Create an Ed25519 key pair outside the repository. Keep the private key in a controlled signing environment; never copy it to the Pi or include it in a release bundle. Install the public key at `/etc/bt-signature-detector/update.pub`, owned by root and readable by the detector group (for example, mode `0640`). The web interface cannot change this trust key.
+Create an Ed25519 key pair outside the repository. Keep the private key in a controlled signing environment; never copy it to the Pi or include it in a release bundle. Install the public key at `/etc/bt-signature-detector-trust/update.pub`, owned by `root:root` and mode `0644`. The trust directory must remain `root:root` mode `0755`; do not put the key under `/etc/bt-signature-detector`, which is writable by the web service group. The web interface cannot change this trust key.
+
+For a new install, the installer can provision the key from a local file with `UPDATE_PUBLIC_KEY=/path/to/update.pub sudo -E bash scripts/install.sh`. To upgrade an existing install, first verify the old key against the fingerprint distributed through a trusted channel, then copy it into the protected directory:
+
+```sh
+sudo install -d -o root -g root -m 0755 /etc/bt-signature-detector-trust
+sudo install -o root -g root -m 0644 /path/to/verified-update.pub /etc/bt-signature-detector-trust/update.pub
+```
+
+Do not automatically migrate `/etc/bt-signature-detector/update.pub`: its parent directory is writable by the web service group, so its contents cannot be trusted during migration.
 
 Build a wheel, then package it with release notes, a semantic version, the external private key, and the public HTTPS URL where the signed bundle will be published:
 
@@ -24,7 +33,7 @@ The package tool creates a ZIP containing `manifest.json`, detached `manifest.si
 
 ## Install from the dashboard
 
-For feed delivery, set `updates.manifest_url` in `/etc/bt-signature-detector/detector.yaml` and install the root-owned public key. Connect the Pi to an uplink, open **Updates**, check the feed, and stage the verified build. For offline delivery, upload the ZIP bundle from **Updates**. Review the version and notes, then select **Apply** and confirm the restart.
+For feed delivery, set `updates.manifest_url` in `/etc/bt-signature-detector/detector.yaml` and install the root-owned public key at `/etc/bt-signature-detector-trust/update.pub`. Connect the Pi to an uplink, open **Updates**, check the feed, and stage the verified build. For offline delivery, upload the ZIP bundle from **Updates**. Review the version and notes, then select **Apply** and confirm the restart.
 
 The updater copies the current virtual environment into a versioned slot and installs the verified wheel without fetching dependencies. Build releases against the dependencies already installed on the Pi. Plan dependency changes as a separate maintenance operation. If the health check fails, the updater restores the previous active release; updating does not write configuration or detection history.
 
