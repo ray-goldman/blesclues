@@ -851,7 +851,10 @@ def main():
     cert_file = config.web.session_key_file.parent / "dashboard.crt"
     key_file = config.web.session_key_file.parent / "dashboard.key"
     _ensure_dashboard_certificate(cert_file, key_file, dashboard_hosts)
-    _serve_dashboard(create_app(services), config.web.port, dashboard_hosts, cert_file, key_file)
+    # The AP address is configured even while the optional hotspot is down.
+    # Binding each address makes Gunicorn fail at startup when that address is
+    # not currently assigned, so listen on all local interfaces instead.
+    _serve_dashboard(create_app(services), config.web.port, ["0.0.0.0"], cert_file, key_file)
 
 
 if __name__ == "__main__": main()
