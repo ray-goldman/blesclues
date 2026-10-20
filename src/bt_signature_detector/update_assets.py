@@ -81,7 +81,7 @@ class SystemdAssetInstaller:
         if relative in self.SCRIPT_NAMES:
             return self.sbin_dir / self.SCRIPT_NAMES[relative], 0o755
         if source.suffix == ".sudoers":
-            return self.systemd_dir.parent / "sudoers.d" / source.name.removesuffix(".sudoers"), 0o440
+            return self.systemd_dir.parent.parent / "sudoers.d" / source.name.removesuffix(".sudoers"), 0o440
         if relative.startswith("systemd/bluetooth.service.d/"):
             return self.systemd_dir / "bluetooth.service.d" / source.name, 0o644
         return self.systemd_dir / source.name, 0o644
