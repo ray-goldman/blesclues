@@ -4,7 +4,9 @@ from dataclasses import dataclass, asdict
 import base64
 import hashlib
 import hmac
+import ipaddress
 import json
+import logging
 import os
 from pathlib import Path
 import secrets
@@ -14,6 +16,7 @@ import tempfile
 import subprocess
 import re
 import threading
+import time
 import yaml
 
 from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
@@ -21,6 +24,8 @@ from .watchlists import WatchListStore
 from .watch_filters import watch_rule_filter_coverage
 from .company_ids import CompanyIdentifierRegistry
 from . import BUILD_NAME, __version__
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -62,6 +67,55 @@ def _verify_password(password: str, encoded: str) -> bool:
         return hmac.compare_digest(expected, raw[16:])
     except (ValueError, TypeError):
         return False
+
+
+def _session_signing_key(key: bytes, password_hash: str) -> bytes:
+    return hmac.new(key, b"blesclues-ui-session\0" + password_hash.encode("ascii"), hashlib.sha256).digest()
+
+
+def _ensure_dashboard_certificate(cert_file: Path, key_file: Path, hosts: list[str]) -> None:
+    if cert_file.exists() and key_file.exists():
+        return
+    from datetime import datetime, timedelta, timezone
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import NameOID
+
+    key_file.parent.mkdir(parents=True, exist_ok=True)
+    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    names = [x509.DNSName("blesclues.local")]
+    for host in hosts:
+        try:
+            names.append(x509.IPAddress(ipaddress.ip_address(host)))
+        except ValueError:
+            names.append(x509.DNSName(host))
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "BLE's Clues local dashboard")])
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(minutes=1))
+        .not_valid_after(now + timedelta(days=3650))
+        .add_extension(x509.SubjectAlternativeName(names), critical=False)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .sign(private_key, hashes.SHA256())
+    )
+    key_tmp = key_file.with_suffix(key_file.suffix + ".tmp")
+    cert_tmp = cert_file.with_suffix(cert_file.suffix + ".tmp")
+    key_tmp.write_bytes(private_key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ))
+    os.chmod(key_tmp, 0o600)
+    cert_tmp.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+    os.chmod(cert_tmp, 0o644)
+    os.replace(key_tmp, key_file)
+    os.replace(cert_tmp, cert_file)
 
 
 def _device_scan_error(exc: Exception) -> str:
@@ -108,10 +162,17 @@ def create_app(services: WebServices) -> Flask:
         services.session_key_file.write_bytes(secrets.token_bytes(32))
         try: os.chmod(services.session_key_file, 0o600)
         except OSError: pass
-    app.secret_key = services.session_key_file.read_bytes()
-    app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict", SESSION_COOKIE_SECURE=False)
+    session_key = services.session_key_file.read_bytes()
+    try:
+        password_hash = services.password_hash_file.read_text(encoding="ascii")
+    except OSError:
+        password_hash = ""
+    app.secret_key = _session_signing_key(session_key, password_hash)
+    app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Strict", SESSION_COOKIE_SECURE=True)
     app.config["MAX_CONTENT_LENGTH"] = services.max_update_bytes + 65_536
     app.extensions["web_services"] = services
+    login_attempts: dict[str, dict[str, float | int]] = {}
+    login_attempts_lock = threading.Lock()
     @app.context_processor
     def inject_build_info():
         return {"build_name": BUILD_NAME, "build_version": __version__}
@@ -135,6 +196,35 @@ def create_app(services: WebServices) -> Flask:
             init_csrf()
             return fn(*args, **kwargs)
         return wrapped
+
+    def login_retry_after(address: str, now: float) -> int:
+        with login_attempts_lock:
+            for client, state in list(login_attempts.items()):
+                if now - float(state["last_seen"]) > 600:
+                    login_attempts.pop(client, None)
+            state = login_attempts.get(address)
+            if state is None:
+                return 0
+            state["last_seen"] = now
+            return max(0, int(float(state.get("blocked_until", 0)) - now + 0.999))
+
+    def record_login_failure(address: str, now: float) -> int:
+        with login_attempts_lock:
+            state = login_attempts.setdefault(address, {"failures": 0, "last_seen": now})
+            if len(login_attempts) > 1024:
+                oldest = min(login_attempts, key=lambda client: float(login_attempts[client]["last_seen"]))
+                if oldest != address:
+                    login_attempts.pop(oldest, None)
+            state["failures"] = int(state["failures"]) + 1
+            state["last_seen"] = now
+            failures = int(state["failures"])
+            if failures >= 5:
+                state["blocked_until"] = now + min(300, 30 * (2 ** min(failures - 5, 3)))
+            return failures
+
+    def record_login_success(address: str) -> None:
+        with login_attempts_lock:
+            login_attempts.pop(address, None)
 
     @app.get("/")
     def index():
@@ -168,20 +258,32 @@ def create_app(services: WebServices) -> Flask:
         services.password_hash_file.write_text(_password_hash(password), encoding="ascii")
         try: os.chmod(services.password_hash_file, 0o600)
         except OSError: pass
+        app.secret_key = _session_signing_key(session_key, services.password_hash_file.read_text(encoding="ascii"))
         session.clear()
         session["authenticated"] = True
         init_csrf()
+        logger.info("Initial dashboard password configured from %s", request.remote_addr or "unknown")
         return "UI password created", 200
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
         if request.method == "GET": return render_template("login.html", setup=False)
+        address = request.remote_addr or "unknown"
+        now = time.monotonic()
+        retry_after = login_retry_after(address, now)
+        if retry_after:
+            return "Too many failed login attempts. Wait before trying again.", 429, {"Retry-After": str(retry_after)}
         try: stored = services.password_hash_file.read_text(encoding="ascii")
         except OSError: return redirect(url_for("setup"))
-        if not _verify_password(request.form.get("password", ""), stored): return "Invalid password", 401
+        if not _verify_password(request.form.get("password", ""), stored):
+            failures = record_login_failure(address, now)
+            logger.warning("Dashboard login failed from %s (failure %d)", address, failures)
+            return "Invalid password", 401
+        record_login_success(address)
         session.clear()
         session["authenticated"] = True
         init_csrf()
+        logger.info("Dashboard login succeeded from %s", address)
         return "Logged in", 200
 
     @app.before_request
@@ -206,8 +308,14 @@ def create_app(services: WebServices) -> Flask:
         except OSError: return "Password is not configured", 400
         if not _verify_password(old, stored): return "Invalid current password", 401
         if len(new) < 12: return "Password must be at least 12 characters", 400
-        services.password_hash_file.write_text(_password_hash(new), encoding="ascii")
-        return "Password changed", 200
+        new_hash = _password_hash(new)
+        services.password_hash_file.write_text(new_hash, encoding="ascii")
+        try: os.chmod(services.password_hash_file, 0o600)
+        except OSError: pass
+        app.secret_key = _session_signing_key(session_key, new_hash)
+        session.clear()
+        logger.info("Dashboard password changed from %s", request.remote_addr or "unknown")
+        return "Password changed. Sign in again.", 200
 
     def current_scan_status():
         status = dict(services.status())
@@ -612,30 +720,33 @@ def _ethernet_ipv4_address(interface: str = "eth0", runner=subprocess.run) -> st
     raise RuntimeError(f"No IPv4 address is configured on {interface}")
 
 
-def _dashboard_socket(host: str, port: int):
-    import socket
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    try:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        freebind = getattr(socket, "IP_FREEBIND", 15)
-        sock.setsockopt(socket.IPPROTO_IP, freebind, 1)
-        sock.bind((host, port))
-        return sock
-    except Exception:
-        sock.close()
-        raise
+def _serve_dashboard(app: Flask, port: int, hosts: list[str], cert_file: Path, key_file: Path) -> None:
+    from gunicorn.app.base import BaseApplication
 
+    class DashboardApplication(BaseApplication):
+        def __init__(self):
+            self.options = {
+                "bind": [f"{host}:{port}" for host in hosts],
+                "workers": 1,
+                "worker_class": "gthread",
+                "threads": 4,
+                "certfile": str(cert_file),
+                "keyfile": str(key_file),
+                "loglevel": "info",
+                "errorlog": "-",
+                "accesslog": None,
+            }
+            super().__init__()
 
-def _serve_dashboard(app: Flask, port: int, hosts: list[str]) -> None:
-    from waitress import serve
-    sockets = []
-    try:
-        for host in hosts:
-            sockets.append(_dashboard_socket(host, port))
-        serve(app, sockets=sockets)
-    finally:
-        for sock in sockets:
-            sock.close()
+        def load_config(self):
+            for key, value in self.options.items():
+                if key in self.cfg.settings and value is not None:
+                    self.cfg.set(key, value)
+
+        def load(self):
+            return app
+
+    DashboardApplication().run()
 
 
 def main():
@@ -736,8 +847,14 @@ def main():
             if config.updates.enabled else None,
         max_update_bytes=config.updates.max_bundle_bytes, restart_scanner=restart_scanner,
         watchlists=WatchListStore(signatures_path), company_identifiers=CompanyIdentifierRegistry.from_package())
-    _serve_dashboard(create_app(services), config.web.port,
-        [_ethernet_ipv4_address(), config.access_point.interface_address.split("/", 1)[0]])
+    dashboard_hosts = [_ethernet_ipv4_address(), config.access_point.interface_address.split("/", 1)[0]]
+    cert_file = config.web.session_key_file.parent / "dashboard.crt"
+    key_file = config.web.session_key_file.parent / "dashboard.key"
+    _ensure_dashboard_certificate(cert_file, key_file, dashboard_hosts)
+    # The AP address is configured even while the optional hotspot is down.
+    # Binding each address makes Gunicorn fail at startup when that address is
+    # not currently assigned, so listen on all local interfaces instead.
+    _serve_dashboard(create_app(services), config.web.port, ["0.0.0.0"], cert_file, key_file)
 
 
 if __name__ == "__main__": main()

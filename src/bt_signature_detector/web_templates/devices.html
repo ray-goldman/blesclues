@@ -58,6 +58,19 @@
         </table>
       </div>
     </section>
+    <section class="surface device-surface wifi-device-surface">
+      <div class="section-heading">
+        <div><p class="kicker">OPTIONAL WI-FI SCAN</p><h2>Nearby Wi-Fi networks</h2></div>
+        <span id="wifi-device-state" class="state-tag waiting"><i></i>Checking radio</span>
+      </div>
+      <p id="wifi-device-note" class="section-note device-wifi-note">Wi-Fi scanning is optional and uses the same setting as Live Feed. Network observations stay in temporary memory.</p>
+      <div class="feed-table-wrap device-wifi-table-wrap">
+        <table class="feed-table device-wifi-table">
+          <thead><tr><th>Network name</th><th>BSSID</th><th>Signal</th><th>Channel</th><th>Security</th><th>Seen</th></tr></thead>
+          <tbody id="wifi-device-rows"><tr><td colspan="6" class="empty-state">Checking Wi-Fi scan mode…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
     <p id="devices-error" class="error-message" role="status"></p>
     <div id="device-action-error" class="action-error" role="alert" hidden><p id="device-action-error-text"></p><button id="dismiss-device-error" class="outline-button" type="button">Dismiss</button></div>
   </main>
