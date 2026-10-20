@@ -3,6 +3,8 @@ Description=Optional passive Wi-Fi observation scanner
 After=NetworkManager.service bt-signature-detector.service
 Requires=NetworkManager.service
 Conflicts=bt-signature-detector-ap.service
+StartLimitIntervalSec=300
+StartLimitBurst=3
 
 [Service]
 Type=simple
@@ -12,11 +14,10 @@ SupplementaryGroups=netdev
 WorkingDirectory=/var/lib/bt-signature-detector
 EnvironmentFile=-/etc/bt-signature-detector/environment
 ExecStart=/opt/bt-signature-detector/active/bin/detector wifi-scan --config /etc/bt-signature-detector/detector.yaml
+ExecStartPre=/usr/sbin/ip link set dev wlan0 up
 ExecStopPost=/usr/bin/rm -f /run/bt-signature-detector/wifi-observations.json
 Restart=on-failure
 RestartSec=15
-StartLimitIntervalSec=300
-StartLimitBurst=3
 AmbientCapabilities=CAP_NET_ADMIN
 CapabilityBoundingSet=CAP_NET_ADMIN
 NoNewPrivileges=true

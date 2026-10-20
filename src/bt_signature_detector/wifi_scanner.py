@@ -72,7 +72,10 @@ def parse_iw_scan(output: str, *, observed_at: datetime | None = None) -> tuple[
             continue
         try:
             signal = round(float(row["SIGNAL"])) if row.get("SIGNAL") else None
-            frequency = int(row["FREQ"]) if row.get("FREQ") else None
+            frequency_value = float(row["FREQ"]) if row.get("FREQ") else None
+            if frequency_value is not None and not frequency_value.is_integer():
+                continue
+            frequency = int(frequency_value) if frequency_value is not None else None
             channel = _channel_for_frequency(frequency) if frequency is not None else None
         except (ValueError, OverflowError):
             continue
