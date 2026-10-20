@@ -203,6 +203,10 @@ h2 { margin: 0; font-size: 15px; line-height: 1.25; letter-spacing: -.02em; font
 .browser-actions button:disabled { opacity: .48; cursor: not-allowed; }
 .device-status-rail { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 14px; }
 .device-surface { margin-top: 14px; border-top: 2px solid var(--blue); }
+.wifi-device-surface { overflow: hidden; }
+.device-wifi-note { margin: 0; padding: 0 16px 12px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.device-wifi-table-wrap { padding: 0 14px 12px; }
+.device-wifi-table { min-width: 700px; }
 .device-table-wrap { overflow: visible; padding: 0 14px 14px; }
 .device-table, .device-table tbody { display: block; width: 100%; min-width: 0; }
 .device-table { border-collapse: collapse; text-align: left; }

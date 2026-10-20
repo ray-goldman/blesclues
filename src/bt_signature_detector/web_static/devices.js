@@ -19,6 +19,70 @@ function formatTime(value) {
   return Number.isNaN(date.valueOf()) ? '—' : date.toLocaleTimeString();
 }
 
+function renderWifiDevices(observations, status) {
+  const target = document.getElementById('wifi-device-rows');
+  const state = document.getElementById('wifi-device-state');
+  const note = document.getElementById('wifi-device-note');
+  if (!target || !state || !note) return;
+
+  if (status.scan_active) {
+    state.className = 'state-tag ready';
+    state.innerHTML = '<i></i>Scanning';
+    note.textContent = `Wi-Fi scanning is enabled. Results refresh about every ${status.scan_interval_seconds || 15} seconds and stay in temporary memory.`;
+  } else if (status.admin_ap_active) {
+    state.className = 'state-tag waiting';
+    state.innerHTML = '<i></i>Admin hotspot active';
+    note.textContent = 'Wi-Fi scanning is paused while the hidden admin hotspot is active.';
+  } else {
+    state.className = 'state-tag waiting';
+    state.innerHTML = '<i></i>Scanning off';
+    note.textContent = 'Enable nearby Wi-Fi scans in Settings to list networks here. The hidden admin hotspot and Wi-Fi scanning cannot run at the same time.';
+  }
+
+  if (!status.scan_active || !observations.length) {
+    const message = status.admin_ap_active
+      ? 'Wi-Fi scanning pauses while the admin hotspot is active.'
+      : status.scan_active ? 'No nearby networks in the latest scan.' : 'Wi-Fi scanning is off.';
+    target.innerHTML = `<tr><td colspan="6" class="empty-state">${escapeHtml(message)}</td></tr>`;
+    return;
+  }
+
+  target.innerHTML = [...observations]
+    .sort((left, right) => String(right.observed_at).localeCompare(String(left.observed_at)))
+    .map(item => {
+      const signal = Number.isFinite(item.signal) ? `${item.signal} dBm` : 'Not reported';
+      return `<tr>
+        <td><strong>${escapeHtml(item.ssid || 'Hidden network')}</strong></td>
+        <td class="mono">${escapeHtml(item.bssid || '—')}</td>
+        <td class="mono">${escapeHtml(signal)}</td>
+        <td class="mono">${escapeHtml(item.channel ?? '—')}</td>
+        <td>${escapeHtml(item.security || 'Open / unknown')}</td>
+        <td class="mono">${escapeHtml(formatTime(item.observed_at))}</td>
+      </tr>`;
+    }).join('');
+}
+
+async function loadWifiDevices() {
+  try {
+    const [statusResponse, observationsResponse] = await Promise.all([
+      fetch('/api/wifi/status', {credentials: 'same-origin'}),
+      fetch('/api/wifi/observations', {credentials: 'same-origin'})
+    ]);
+    if (statusResponse.status === 401 || observationsResponse.status === 401) { location.href = '/login'; return; }
+    if (!statusResponse.ok || !observationsResponse.ok) throw Error('Could not read Wi-Fi scan results.');
+    const [status, result] = await Promise.all([statusResponse.json(), observationsResponse.json()]);
+    renderWifiDevices(result.observations || [], status);
+  } catch (error) {
+    const state = document.getElementById('wifi-device-state');
+    const rows = document.getElementById('wifi-device-rows');
+    if (state) {
+      state.className = 'state-tag error';
+      state.textContent = 'Wi-Fi status unavailable';
+    }
+    if (rows) rows.innerHTML = `<tr><td colspan="6" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+  }
+}
+
 function setActionError(message) {
   const panel = document.getElementById('device-action-error');
   panel.hidden = !message;
@@ -244,3 +308,5 @@ document.getElementById('stop-browser').addEventListener('click', () => setBrows
 document.getElementById('dismiss-device-error').addEventListener('click', () => setActionError(''));
 loadDevices();
 setInterval(loadDevices, 2000);
+loadWifiDevices();
+setInterval(loadWifiDevices, 5000);
