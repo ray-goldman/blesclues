@@ -22,7 +22,7 @@ def package_release(wheel: Path, release_notes: str, version: str, private_key_p
                     output: Path, artifact_url: str | None = None) -> Path:
     wheel, private_key_path, output = Path(wheel), Path(private_key_path), Path(output)
     if wheel.suffix != ".whl" or not wheel.is_file(): raise ValueError("release artifact must be an existing wheel")
-    if not re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?", version): raise ValueError("invalid release version")
+    if not re.fullmatch(r"\d+\.\d+\.\d+(?:(?:a|b|rc)\d+|[-+][A-Za-z0-9.-]+)?", version): raise ValueError("invalid release version")
     if len(release_notes) > 20_000: raise ValueError("release notes are too long")
     key = serialization.load_pem_private_key(private_key_path.read_bytes(), password=None)
     if not isinstance(key, Ed25519PrivateKey): raise ValueError("release key must be Ed25519")
