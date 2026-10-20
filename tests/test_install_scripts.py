@@ -23,6 +23,11 @@ class InstallScriptTests(unittest.TestCase):
         self.assertIn("LogRateLimitIntervalSec=30s", unit + web_unit)
         self.assertIn("LogRateLimitBurst=100", unit + web_unit)
 
+    def test_updater_sandbox_can_write_only_its_managed_system_paths(self):
+        unit = (self.root / "systemd" / "bt-signature-detector-updater@.service").read_text()
+        self.assertIn("ProtectSystem=strict", unit)
+        self.assertIn("ReadWritePaths=/opt/bt-signature-detector /var/lib/bt-signature-detector /etc/systemd/system /etc/sudoers.d /usr/local/sbin", unit)
+
     def test_install_preserves_config_and_uninstall_requires_explicit_purge(self):
         install = (self.root / "scripts" / "install.sh").read_text()
         uninstall = (self.root / "scripts" / "uninstall.sh").read_text()

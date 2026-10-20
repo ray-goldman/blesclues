@@ -38,10 +38,19 @@ class WebUpdateTests(unittest.TestCase):
                 staging_dir=staging, max_bytes=1024, apply_runner=run)
             staged = manager.upload(io.BytesIO(bundle.getvalue()))
             self.assertEqual(staged["version"], "1.2.3")
+            duplicate = manager.upload(io.BytesIO(bundle.getvalue()))
+            self.assertEqual(duplicate["version"], "1.2.3")
+            self.assertNotEqual(duplicate["id"], staged["id"])
+            self.assertEqual(len(manager.status()["staged"]), 1)
+            self.assertFalse((staging / f"{staged['id']}.zip").exists())
+            duplicate_id = "a" * 32
+            (staging / f"{duplicate_id}.zip").write_bytes((staging / f"{duplicate['id']}.zip").read_bytes())
             again = WebUpdateManager(manifest_url=None, public_key_file=public_path,
                 staging_dir=staging, max_bytes=1024, apply_runner=run)
-            self.assertEqual(again.status()["staged"][0]["id"], staged["id"])
-            self.assertTrue(again.apply(staged["id"])["success"])
+            self.assertEqual(len(again.status()["staged"]), 1)
+            remaining_id = again.status()["staged"][0]["id"]
+            self.assertEqual(len(list(staging.glob("*.zip"))), 1)
+            self.assertTrue(again.apply(remaining_id)["success"])
             self.assertEqual(commands[0], ["sudo", "-n", "/usr/local/sbin/bt-detector-apply-update"])
 
 

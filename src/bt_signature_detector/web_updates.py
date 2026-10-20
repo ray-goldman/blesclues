@@ -36,15 +36,33 @@ class WebUpdateManager:
     def _recover_staged(self) -> None:
         try: verifier = self._verifier()
         except (OSError, ValueError): return
-        for path in sorted(self.staging_dir.glob("*.zip"))[-20:]:
+        paths = sorted(self.staging_dir.glob("*.zip"), key=lambda path: path.stat().st_mtime, reverse=True)
+        recovered_versions = set()
+        for path in paths:
             if not re.fullmatch(r"[0-9a-f]{32}\.zip", path.name): continue
             try:
                 release = verifier.verify_bundle(path)
+                version = release.manifest.version
+                if version in recovered_versions:
+                    path.unlink(missing_ok=True)
+                    continue
+                recovered_versions.add(version)
                 staged_id = path.stem
-                self._staged[staged_id] = {"id": staged_id, "version": release.manifest.version,
+                self._staged[staged_id] = {"id": staged_id, "version": version,
                     "release_notes": release.manifest.release_notes, "source": "staged"}
             except (OSError, ValueError):
                 continue
+
+    def _remember_staged(self, staged, source: str) -> dict:
+        result = {"id": staged.staged_id, "version": staged.manifest.version,
+                  "release_notes": staged.manifest.release_notes, "source": source}
+        with self._lock:
+            for staged_id, existing in list(self._staged.items()):
+                if existing["version"] == result["version"]:
+                    self._staged.pop(staged_id)
+                    (self.staging_dir / f"{staged_id}.zip").unlink(missing_ok=True)
+            self._staged[staged.staged_id] = result
+        return result
 
     def check(self) -> dict:
         if not self.manifest_url: raise ValueError("No HTTPS release manifest URL is configured")
@@ -60,19 +78,13 @@ class WebUpdateManager:
 
     def upload(self, stream) -> dict:
         staged = stage_upload(stream, self.staging_dir, self._verifier())
-        result = {"id": staged.staged_id, "version": staged.manifest.version,
-                  "release_notes": staged.manifest.release_notes, "source": "upload"}
-        with self._lock: self._staged[staged.staged_id] = result
-        return result
+        return self._remember_staged(staged, "upload")
 
     def stage_download(self) -> dict:
         with self._lock: release = self._latest
         if release is None: raise ValueError("Check for a release before staging a download")
         staged = stage_download(release, self.transport, self.staging_dir, self._verifier(), self.timeout)
-        result = {"id": staged.staged_id, "version": staged.manifest.version,
-                  "release_notes": staged.manifest.release_notes, "source": "download"}
-        with self._lock: self._staged[staged.staged_id] = result
-        return result
+        return self._remember_staged(staged, "download")
 
     def status(self) -> dict:
         with self._lock:

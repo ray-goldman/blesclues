@@ -11,6 +11,6 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/opt/bt-signature-detector /var/lib/bt-signature-detector
+ReadWritePaths=/opt/bt-signature-detector /var/lib/bt-signature-detector /etc/systemd/system /etc/sudoers.d /usr/local/sbin
 StandardOutput=journal
 StandardError=journal
