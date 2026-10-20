@@ -19,6 +19,13 @@ function companyLabel(id, names) {
 
 function prettyCriteria(criteria, manufacturerNames = {}) {
   const labels = [];
+  if (criteria.ssid_exact) labels.push(`Exact SSID “${criteria.ssid_exact}”`);
+  if (criteria.ssid_contains) labels.push(`SSID contains “${criteria.ssid_contains}”`);
+  if (criteria.ssid_regex) labels.push(`SSID regex /${criteria.ssid_regex}/`);
+  if (criteria.bssid_exact) labels.push(`Exact BSSID ${criteria.bssid_exact}`);
+  if (criteria.bssid_prefixes?.length) labels.push(`BSSID prefix ${criteria.bssid_prefixes.join(', ')}`);
+  if (criteria.wifi_channels?.length) labels.push(`Wi-Fi channel ${criteria.wifi_channels.join(', ')}`);
+  if (criteria.wifi_security?.length) labels.push(`Wi-Fi security ${criteria.wifi_security.join(', ')}`);
   if (criteria.observed_identifiers?.length) labels.push(`Observed address ${criteria.observed_identifiers.join(', ')}`);
   if (criteria.identifier_prefixes?.length) labels.push(`MAC prefix ${criteria.identifier_prefixes.join(', ')}`);
   if (criteria.name_exact) labels.push(`Exact name “${criteria.name_exact}”`);
@@ -35,6 +42,7 @@ function prettyCriteria(criteria, manufacturerNames = {}) {
 
 function coverageLabel(value, enabled) {
   if (!enabled || value === 'disabled') return 'Disabled';
+  if (value === 'wifi_scan') return 'Wi-Fi scans';
   return ({full: 'Full', partial: 'Partial', browser_only: 'Browser scan only'})[value] || 'Browser scan only';
 }
 

@@ -203,10 +203,19 @@ h2 { margin: 0; font-size: 15px; line-height: 1.25; letter-spacing: -.02em; font
 .browser-actions button:disabled { opacity: .48; cursor: not-allowed; }
 .device-status-rail { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 14px; }
 .device-surface { margin-top: 14px; border-top: 2px solid var(--blue); }
-.wifi-device-surface { overflow: hidden; }
+.wifi-device-surface { border-top-color: #388b88; }
 .device-wifi-note { margin: 0; padding: 0 16px 12px; color: var(--muted); font-size: 10px; line-height: 1.5; }
-.device-wifi-table-wrap { padding: 0 14px 12px; }
-.device-wifi-table { min-width: 700px; }
+.wifi-device-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0 14px 14px; }
+.wifi-device-card { min-width: 0; padding: 12px; border: 1px solid #c9dfdc; border-top: 2px solid #388b88; background: #f5faf9; }
+.wifi-card-heading { display: grid; gap: 5px; margin-bottom: 11px; }
+.wifi-card-heading .kicker { margin: 0; color: #397b78; }
+.wifi-card-heading strong { color: var(--ink); font-size: 12px; overflow-wrap: anywhere; }
+.wifi-device-card dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin: 0 0 8px; }
+.wifi-device-card dl > div { min-width: 0; }
+.wifi-device-card dt { margin-bottom: 3px; color: var(--muted); font: 8px var(--mono); text-transform: uppercase; }
+.wifi-device-card dd { margin: 0; color: #435047; font-size: 10px; overflow-wrap: anywhere; }
+.wifi-device-card .text-button { color: #286f6c; }
+.wifi-device-card .text-button:hover { background: #e1f0ee; color: #174f4d; }
 .device-table-wrap { overflow: visible; padding: 0 14px 14px; }
 .device-table, .device-table tbody { display: block; width: 100%; min-width: 0; }
 .device-table { border-collapse: collapse; text-align: left; }
@@ -303,6 +312,7 @@ main > .error-message:empty { display: none; }
   .watchlist-sidebar { padding-bottom: 0; }
   .watchlist-sidebar nav { display: flex; overflow-x: auto; }
   .watchlist-menu-item { width: auto; min-width: 120px; border-bottom: 1px solid #e9ede7; }
+  .wifi-device-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 520px) {
   .topbar { height: auto; min-height: 60px; flex-wrap: wrap; gap: 0 8px; padding-top: 8px; }

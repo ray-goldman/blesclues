@@ -116,7 +116,7 @@ class WebConfig:
 class UpdateConfig:
     enabled: bool = True
     manifest_url: str | None = None
-    public_key_file: Path = Path("/etc/bt-signature-detector/update.pub")
+    public_key_file: Path = Path("/etc/bt-signature-detector-trust/update.pub")
     max_bundle_bytes: int = 20_000_000
     timeout_seconds: float = 10.0
 
@@ -336,7 +336,7 @@ def validate_config_data(data: Mapping[str, object], *, base_dir: Path | None = 
     updates = UpdateConfig(
         enabled=_bool(u.get("enabled", True), "updates.enabled"),
         manifest_url=manifest_url,
-        public_key_file=Path(u.get("public_key_file", "/etc/bt-signature-detector/update.pub")),
+        public_key_file=Path(u.get("public_key_file", "/etc/bt-signature-detector-trust/update.pub")),
         max_bundle_bytes=_int(u.get("max_bundle_bytes", 20_000_000), "updates.max_bundle_bytes", minimum=1024, maximum=500_000_000),
         timeout_seconds=_float(u.get("timeout_seconds", 10), "updates.timeout_seconds", minimum=0.1, maximum=300),
     )

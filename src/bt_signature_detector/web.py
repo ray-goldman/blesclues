@@ -429,25 +429,37 @@ def create_app(services: WebServices) -> Flask:
 
     def watch_rule_data(signature):
         criteria = {}
-        if signature.exact_identifiers:
+        if signature.protocol == "wifi":
+            if signature.ssid_pattern is not None:
+                criteria[{"exact": "ssid_exact", "contains": "ssid_contains", "regex": "ssid_regex"}[signature.ssid_mode]] = signature.ssid_pattern
+            if signature.bssid_exact:
+                criteria["bssid_exact"] = signature.bssid_exact
+            if signature.bssid_prefixes:
+                criteria["bssid_prefixes"] = list(signature.bssid_prefixes)
+            if signature.wifi_channels:
+                criteria["wifi_channels"] = list(signature.wifi_channels)
+            if signature.wifi_security:
+                criteria["wifi_security"] = list(signature.wifi_security)
+        if signature.protocol == "ble" and signature.exact_identifiers:
             criteria["observed_identifiers"] = list(signature.exact_identifiers)
-        if signature.identifier_prefixes:
+        if signature.protocol == "ble" and signature.identifier_prefixes:
             criteria["identifier_prefixes"] = list(signature.identifier_prefixes)
-        if signature.name_pattern is not None:
+        if signature.protocol == "ble" and signature.name_pattern is not None:
             criteria["name_exact" if signature.name_mode == "exact" else "name_regex" if signature.name_mode == "regex" else "name_contains"] = signature.name_pattern
-        if signature.manufacturer_ids:
+        if signature.protocol == "ble" and signature.manufacturer_ids:
             criteria["manufacturer_ids"] = list(signature.manufacturer_ids)
-        if signature.manufacturer_id is not None and signature.manufacturer_pattern is not None:
+        if signature.protocol == "ble" and signature.manufacturer_id is not None and signature.manufacturer_pattern is not None:
             value = signature.manufacturer_pattern.hex()
             if signature.manufacturer_mask is not None:
                 value = {"pattern": value, "mask": signature.manufacturer_mask.hex()}
             criteria["manufacturer_data"] = {str(signature.manufacturer_id): value}
-        if signature.service_uuids:
+        if signature.protocol == "ble" and signature.service_uuids:
             criteria["service_uuids"] = list(signature.service_uuids)
-        if signature.service_data:
+        if signature.protocol == "ble" and signature.service_data:
             criteria["service_data"] = {key: value.hex() for key, value in signature.service_data.items()}
         coverage = watch_rule_filter_coverage(signature).status
         return {"id": signature.signature_id, "label": signature.name, "enabled": signature.enabled,
+                "protocol": signature.protocol,
                 "watchlist_name": signature.watchlist, "match_mode": signature.match_mode, "criteria": criteria, "filter_coverage": coverage,
                 "manufacturer_names": {**manufacturer_names(criteria.get("manufacturer_data")),
                     **manufacturer_names(criteria.get("manufacturer_ids"))},

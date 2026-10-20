@@ -67,7 +67,8 @@ class WatchListStore:
 
     def create_rule(self, rule_data: Mapping[str, object]) -> Signature:
         allowed = {"label", "list_name", "match_mode", "observed_identifiers", "identifier_prefixes", "name_exact", "name_contains", "name_regex",
-                   "manufacturer_data", "manufacturer_ids", "service_uuids", "service_data"}
+                   "manufacturer_data", "manufacturer_ids", "service_uuids", "service_data", "protocol", "ssid_exact", "ssid_contains", "ssid_regex",
+                   "bssid_exact", "bssid_prefixes", "wifi_channels", "wifi_security"}
         unknown = set(rule_data) - allowed
         if unknown:
             raise ValueError(f"{sorted(unknown)[0]} is not a supported watch rule field")

@@ -56,6 +56,13 @@ class Signature:
     enabled: bool = True
     identifier_prefixes: tuple[str, ...] = ()
     manufacturer_ids: tuple[int, ...] = ()
+    protocol: str = "ble"
+    ssid_pattern: str | None = None
+    ssid_mode: str = "exact"
+    bssid_exact: str | None = None
+    bssid_prefixes: tuple[str, ...] = ()
+    wifi_channels: tuple[int, ...] = ()
+    wifi_security: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "service_uuids", tuple(self.service_uuids))
@@ -63,6 +70,9 @@ class Signature:
         object.__setattr__(self, "exact_identifiers", tuple(self.exact_identifiers))
         object.__setattr__(self, "identifier_prefixes", tuple(self.identifier_prefixes))
         object.__setattr__(self, "manufacturer_ids", tuple(self.manufacturer_ids))
+        object.__setattr__(self, "bssid_prefixes", tuple(self.bssid_prefixes))
+        object.__setattr__(self, "wifi_channels", tuple(self.wifi_channels))
+        object.__setattr__(self, "wifi_security", tuple(self.wifi_security))
 
 
 @dataclass(frozen=True, slots=True)

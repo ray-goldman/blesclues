@@ -67,6 +67,8 @@ def _predicate_patterns(signature: Signature) -> tuple[tuple[OrPatternConfig, ..
 def watch_rule_filter_coverage(signature: Signature) -> RuleFilterCoverage:
     if not signature.enabled:
         return RuleFilterCoverage("disabled", ())
+    if signature.protocol == "wifi":
+        return RuleFilterCoverage("wifi_scan", ())
     patterns, total = _predicate_patterns(signature)
     if not patterns:
         return RuleFilterCoverage("browser_only", ())
@@ -98,6 +100,8 @@ def derived_watch_filters(signatures: Sequence[Signature]) -> tuple[OrPatternCon
     seen: set[tuple[int, int, bytes]] = set()
     for signature in signatures:
         if signature.watchlist is None or not signature.enabled:
+            continue
+        if signature.protocol != "ble":
             continue
         for pattern in watch_rule_filter_coverage(signature).patterns:
             key = (pattern.start_position, pattern.ad_data_type, pattern.pattern)

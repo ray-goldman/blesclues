@@ -1,6 +1,8 @@
 const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
 let currentDevices = [];
+let currentWifiDevices = [];
 let watchOptions = [];
+let watchProtocol = 'ble';
 let pausedInventory = false;
 
 function text(id, value) {
@@ -20,10 +22,17 @@ function formatTime(value) {
 }
 
 function renderWifiDevices(observations, status) {
-  const target = document.getElementById('wifi-device-rows');
+  const target = document.getElementById('wifi-device-cards');
   const state = document.getElementById('wifi-device-state');
   const note = document.getElementById('wifi-device-note');
   if (!target || !state || !note) return;
+
+  if (pausedInventory) {
+    state.className = 'state-tag waiting';
+    state.innerHTML = '<i></i>Paused';
+    note.textContent = 'Showing the Wi-Fi networks seen before the scan was paused. Resume the device scan to refresh results.';
+    return;
+  }
 
   if (status.scan_active) {
     state.className = 'state-tag ready';
@@ -43,23 +52,23 @@ function renderWifiDevices(observations, status) {
     const message = status.admin_ap_active
       ? 'Wi-Fi scanning pauses while the admin hotspot is active.'
       : status.scan_active ? 'No nearby networks in the latest scan.' : 'Wi-Fi scanning is off.';
-    target.innerHTML = `<tr><td colspan="6" class="empty-state">${escapeHtml(message)}</td></tr>`;
+    target.innerHTML = `<p class="empty-state">${escapeHtml(message)}</p>`;
     return;
   }
 
-  target.innerHTML = [...observations]
-    .sort((left, right) => String(right.observed_at).localeCompare(String(left.observed_at)))
-    .map(item => {
+  currentWifiDevices = [...observations]
+    .sort((left, right) => String(right.observed_at).localeCompare(String(left.observed_at)));
+  target.innerHTML = currentWifiDevices.map((item, index) => {
       const signal = Number.isFinite(item.signal) ? `${item.signal} dBm` : 'Not reported';
-      return `<tr>
-        <td><strong>${escapeHtml(item.ssid || 'Hidden network')}</strong></td>
-        <td class="mono">${escapeHtml(item.bssid || '—')}</td>
-        <td class="mono">${escapeHtml(signal)}</td>
-        <td class="mono">${escapeHtml(item.channel ?? '—')}</td>
-        <td>${escapeHtml(item.security || 'Open / unknown')}</td>
-        <td class="mono">${escapeHtml(formatTime(item.observed_at))}</td>
-      </tr>`;
+      return `<article class="wifi-device-card">
+        <div class="wifi-card-heading"><p class="kicker">WI-FI NETWORK</p><strong>${escapeHtml(item.ssid || 'Hidden network')}</strong></div>
+        <dl><div><dt>BSSID</dt><dd class="mono">${escapeHtml(item.bssid || '—')}</dd></div><div><dt>Signal</dt><dd class="mono">${escapeHtml(signal)}</dd></div>
+          <div><dt>Channel</dt><dd class="mono">${escapeHtml(item.channel ?? '—')}</dd></div><div><dt>Security</dt><dd>${escapeHtml(item.security || 'Open / unknown')}</dd></div>
+          <div><dt>Last seen</dt><dd class="mono">${escapeHtml(formatTime(item.observed_at))}</dd></div></dl>
+        <button type="button" class="text-button" data-wifi-watch-index="${index}">Watch this network</button>
+      </article>`;
     }).join('');
+  target.querySelectorAll('[data-wifi-watch-index]').forEach(button => button.addEventListener('click', () => openWatchDialog(currentWifiDevices[Number(button.dataset.wifiWatchIndex)], 'wifi')));
 }
 
 async function loadWifiDevices() {
@@ -74,12 +83,12 @@ async function loadWifiDevices() {
     renderWifiDevices(result.observations || [], status);
   } catch (error) {
     const state = document.getElementById('wifi-device-state');
-    const rows = document.getElementById('wifi-device-rows');
+    const rows = document.getElementById('wifi-device-cards');
     if (state) {
       state.className = 'state-tag error';
       state.textContent = 'Wi-Fi status unavailable';
     }
-    if (rows) rows.innerHTML = `<tr><td colspan="6" class="empty-state">${escapeHtml(error.message)}</td></tr>`;
+    if (rows) rows.innerHTML = `<p class="empty-state">${escapeHtml(error.message)}</p>`;
   }
 }
 
@@ -130,9 +139,21 @@ function renderDevices(devices) {
   target.querySelectorAll('[data-watch-index]').forEach(button => button.addEventListener('click', () => openWatchDialog(currentDevices[Number(button.dataset.watchIndex)])));
 }
 
-function openWatchDialog(device) {
+function openWatchDialog(device, protocol = 'ble') {
   if (!device) return;
+  watchProtocol = protocol;
   const options = [];
+  if (protocol === 'wifi') {
+    if (device.ssid) options.push({kind: 'ssid', value: device.ssid, label: `SSID “${device.ssid}”`, checked: true});
+    if (device.bssid) {
+      options.push({kind: 'bssid_exact', value: device.bssid, label: `Exact BSSID ${device.bssid}`, checked: false});
+      const octets = device.bssid.split(':');
+      if (octets.length === 6 && octets.slice(0, 3).every(value => /^[0-9a-f]{2}$/i.test(value)))
+        options.push({kind: 'bssid_prefix', value: octets.slice(0, 3).join(':'), label: `BSSID prefix ${octets.slice(0, 3).join(':')}`, checked: false});
+    }
+    if (device.channel) options.push({kind: 'wifi_channel', value: device.channel, label: `Channel ${device.channel}`, checked: false});
+    options.push({kind: 'wifi_security', value: device.security || 'Open / unknown', label: `Security: ${device.security || 'Open / unknown'}`, checked: false});
+  } else {
   if (device.identifier) {
     options.push({kind: 'observed_identifiers', value: device.identifier, label: `Exact observed address ${device.identifier}`, checked: false});
     const octets = device.identifier.split(/[:-]/);
@@ -147,6 +168,7 @@ function openWatchDialog(device) {
   }
   for (const uuid of device.service_uuids || []) options.push({kind: 'service_uuids', value: uuid, label: `Advertised service ${uuid}`});
   for (const [uuid, payload] of Object.entries(device.service_data || {})) options.push({kind: 'service_data', key: uuid, value: payload, label: `Service data ${uuid} · prefix ${payload}`});
+  }
   watchOptions = options;
   const criteria = document.getElementById('watch-criteria-options');
   criteria.innerHTML = options.map((item, index) => {
@@ -156,12 +178,19 @@ function openWatchDialog(device) {
         ? '<label class="field prefix-choice">Match first<select class="watch-address-octets"><option value="1">1 octet</option><option value="2">2 octets</option><option value="3" selected>3 octets</option></select></label>'
       : item.kind === 'name_exact'
         ? `<label class="field prefix-choice">Name pattern<input class="watch-name-pattern" value="${escapeHtml(item.value)}" maxlength="248" required></label><label class="field prefix-choice">Name match<select class="watch-name-mode"><option value="exact">Exact</option><option value="contains">Contains</option><option value="regex">Regular expression</option></select><span class="field-note">Nested or ambiguous repeated groups are rejected to keep scans responsive.</span></label>`
+      : item.kind === 'ssid'
+        ? `<label class="field prefix-choice">SSID pattern<input class="watch-ssid-pattern" value="${escapeHtml(item.value)}" maxlength="32" required></label><label class="field prefix-choice">SSID match<select class="watch-ssid-mode"><option value="exact">Exact</option><option value="contains">Contains</option><option value="regex">Regular expression</option></select><span class="field-note">Nested or ambiguous repeated groups are rejected to keep scans responsive.</span></label>`
+      : item.kind === 'bssid_prefix'
+        ? '<label class="field prefix-choice">Match first<select class="watch-address-octets"><option value="1">1 octet</option><option value="2">2 octets</option><option value="3" selected>3 octets</option></select></label>'
         : '';
     return `<div class="watch-option"><label><input type="checkbox" data-watch-kind="${escapeHtml(item.kind)}" data-watch-index="${index}" ${item.checked === false ? '' : 'checked'}><span>${escapeHtml(item.label)}</span></label>${controls}</div>`;
-  }).join('') || '<p class="empty-state">No name, address, manufacturer data, or service UUID was observed. This device cannot prefill a rule yet.</p>';
-  document.getElementById('watch-address-note').textContent = device.identifier ? `Address ${device.identifier} can rotate. An address rule only matches this exact observed identifier.` : '';
+  }).join('') || '<p class="empty-state">No matching characteristics were observed.</p>';
+  document.getElementById('watch-dialog-title').textContent = protocol === 'wifi' ? 'Watch this network' : 'Watch this device';
+  document.getElementById('watch-address-note').textContent = protocol === 'wifi'
+    ? 'SSID rules can match network names. BSSID rules use the access point address, which may change.'
+    : device.identifier ? `Address ${device.identifier} can rotate. An address rule only matches this exact observed identifier.` : '';
   const form = document.getElementById('watch-rule-form');
-  form.elements.label.value = device.name || 'BLE device';
+  form.elements.label.value = protocol === 'wifi' ? device.ssid || 'Wi-Fi network' : device.name || 'BLE device';
   form.elements.list_name.value = '';
   form.elements.match_mode.value = 'all';
   document.getElementById('watch-form-error').textContent = '';
@@ -184,6 +213,7 @@ document.getElementById('watch-rule-form').addEventListener('submit', async even
   event.preventDefault();
   const form = event.currentTarget;
   const body = {label: form.elements.label.value.trim(), list_name: form.elements.list_name.value.trim(), match_mode: form.elements.match_mode.value};
+  if (watchProtocol === 'wifi') body.protocol = 'wifi';
   const selected = [...document.querySelectorAll('#watch-criteria-options input:checked')];
   if (selected.filter(item => item.dataset.watchKind === 'manufacturer_data').length > 1) {
     document.getElementById('watch-form-error').textContent = 'A rule can use one manufacturer company ID. Save separate rules for additional IDs.';
@@ -193,7 +223,20 @@ document.getElementById('watch-rule-form').addEventListener('submit', async even
     const option = currentWatchOptions()[Number(checkbox.dataset.watchIndex)];
     if (!option) continue;
     const row = checkbox.closest('.watch-option');
-    if (option.kind === 'observed_identifiers') body.observed_identifiers = [...(body.observed_identifiers || []), option.value];
+    if (option.kind === 'ssid') {
+      const mode = row.querySelector('.watch-ssid-mode')?.value || 'exact';
+      const value = row.querySelector('.watch-ssid-pattern')?.value.trim();
+      if (!value) { document.getElementById('watch-form-error').textContent = 'Enter an SSID pattern.'; return; }
+      body[mode === 'contains' ? 'ssid_contains' : mode === 'regex' ? 'ssid_regex' : 'ssid_exact'] = value;
+    }
+    else if (option.kind === 'bssid_exact') body.bssid_exact = option.value;
+    else if (option.kind === 'bssid_prefix') {
+      const octets = Number(row.querySelector('.watch-address-octets')?.value || 3);
+      body.bssid_prefixes = [...(body.bssid_prefixes || []), option.value.split(':').slice(0, octets).join(':')];
+    }
+    else if (option.kind === 'wifi_channel') body.wifi_channels = [...(body.wifi_channels || []), Number(option.value)];
+    else if (option.kind === 'wifi_security') body.wifi_security = [...(body.wifi_security || []), option.value];
+    else if (option.kind === 'observed_identifiers') body.observed_identifiers = [...(body.observed_identifiers || []), option.value];
     else if (option.kind === 'name_exact') {
       const mode = row.querySelector('.watch-name-mode')?.value || 'exact';
       const namePattern = row.querySelector('.watch-name-pattern')?.value.trim();
@@ -223,7 +266,7 @@ document.getElementById('watch-rule-form').addEventListener('submit', async even
     }
     else if (option.kind === 'service_uuids') body.service_uuids = [...(body.service_uuids || []), option.value];
   }
-  if (!Object.keys(body).some(key => ['observed_identifiers', 'identifier_prefixes', 'name_exact', 'name_contains', 'name_regex', 'manufacturer_data', 'manufacturer_ids', 'service_uuids', 'service_data'].includes(key))) {
+  if (!Object.keys(body).some(key => ['observed_identifiers', 'identifier_prefixes', 'name_exact', 'name_contains', 'name_regex', 'manufacturer_data', 'manufacturer_ids', 'service_uuids', 'service_data', 'ssid_exact', 'ssid_contains', 'ssid_regex', 'bssid_exact', 'bssid_prefixes', 'wifi_channels', 'wifi_security'].includes(key))) {
     document.getElementById('watch-form-error').textContent = 'Select at least one observed characteristic.';
     return;
   }
