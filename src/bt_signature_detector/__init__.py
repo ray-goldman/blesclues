@@ -1,4 +1,4 @@
 """BLE signature detector package."""
 
-__version__ = "0.1.0a4"
-BUILD_NAME = "Alpha 4"
+__version__ = "0.1.0a5"
+BUILD_NAME = "Alpha 5"

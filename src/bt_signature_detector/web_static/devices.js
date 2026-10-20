@@ -50,15 +50,15 @@ function renderWifiDevices(observations, status) {
   }
 
   currentWifiDevices = [...observations]
-    .sort((left, right) => String(right.observed_at).localeCompare(String(left.observed_at)))
-    .map(item => {
+    .sort((left, right) => String(right.observed_at).localeCompare(String(left.observed_at)));
+  target.innerHTML = currentWifiDevices.map((item, index) => {
       const signal = Number.isFinite(item.signal) ? `${item.signal} dBm` : 'Not reported';
       return `<article class="wifi-device-card">
         <div class="wifi-card-heading"><p class="kicker">WI-FI NETWORK</p><strong>${escapeHtml(item.ssid || 'Hidden network')}</strong></div>
         <dl><div><dt>BSSID</dt><dd class="mono">${escapeHtml(item.bssid || '—')}</dd></div><div><dt>Signal</dt><dd class="mono">${escapeHtml(signal)}</dd></div>
           <div><dt>Channel</dt><dd class="mono">${escapeHtml(item.channel ?? '—')}</dd></div><div><dt>Security</dt><dd>${escapeHtml(item.security || 'Open / unknown')}</dd></div>
           <div><dt>Last seen</dt><dd class="mono">${escapeHtml(formatTime(item.observed_at))}</dd></div></dl>
-        <button type="button" class="text-button" data-wifi-watch-index="${currentWifiDevices.indexOf(item)}">Watch this network</button>
+        <button type="button" class="text-button" data-wifi-watch-index="${index}">Watch this network</button>
       </article>`;
     }).join('');
   target.querySelectorAll('[data-wifi-watch-index]').forEach(button => button.addEventListener('click', () => openWatchDialog(currentWifiDevices[Number(button.dataset.wifiWatchIndex)], 'wifi')));
