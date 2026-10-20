@@ -134,8 +134,10 @@ class UpdateCoordinator:
         staged_id = __import__("uuid").uuid4().hex
         target = self.staged_dir / staged_id
         target.mkdir(mode=0o700)
-        (target / "artifact.whl").write_bytes(verified.artifact_bytes)
         manifest = verified.manifest
+        wheel_version = manifest.version.replace("-", "_")
+        wheel_name = f"bt_signature_detector-{wheel_version}-py3-none-any.whl"
+        (target / wheel_name).write_bytes(verified.artifact_bytes)
         (target / "manifest.json").write_text(json.dumps({
             "version": manifest.version, "artifact_url": manifest.artifact_url,
             "sha256": manifest.sha256, "size_bytes": manifest.size_bytes,
@@ -145,12 +147,13 @@ class UpdateCoordinator:
     def apply(self, staged_id: str) -> UpdateResult:
         if not re.fullmatch(r"[0-9a-f]{32}", staged_id): raise ValueError("invalid staged update id")
         stage = (self.staged_dir / staged_id).resolve()
-        if stage.parent != self.staged_dir.resolve() or not (stage / "artifact.whl").is_file():
-            raise ValueError("staged update was not found")
+        if stage.parent != self.staged_dir.resolve(): raise ValueError("staged update was not found")
         try:
             data = json.loads((stage / "manifest.json").read_text(encoding="utf-8"))
             manifest = ReleaseManifest(**data)
-            artifact = (stage / "artifact.whl").read_bytes()
+            wheel_version = manifest.version.replace("-", "_")
+            wheel_path = stage / f"bt_signature_detector-{wheel_version}-py3-none-any.whl"
+            artifact = wheel_path.read_bytes()
         except (OSError, ValueError, TypeError) as exc:
             raise ValueError("staged update metadata is invalid") from exc
         if len(artifact) != manifest.size_bytes:
@@ -171,7 +174,7 @@ class UpdateCoordinator:
             if not python.exists():
                 self.runner([sys.executable, "-m", "venv", str(slot)], check=True, capture_output=True, text=True)
                 python = slot / "bin" / "python"
-            self.runner([str(python), "-m", "pip", "install", "--no-deps", "--force-reinstall", str(stage / "artifact.whl")],
+            self.runner([str(python), "-m", "pip", "install", "--no-deps", "--force-reinstall", str(wheel_path)],
                         check=True, capture_output=True, text=True)
             self._switch_active(slot)
             asset_snapshot = self._install_release_assets(slot)

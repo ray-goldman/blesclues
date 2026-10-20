@@ -100,6 +100,28 @@ class UpdateVerificationTests(unittest.TestCase):
             self.assertTrue(active["path"].name.startswith("1.2.3-"))
             self.assertTrue((active["path"] / "runtime.txt").exists())
 
+    def test_pip_receives_a_wheel_filename_not_the_bundle_placeholder(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "app"
+            old = root / "venv-old"
+            old.mkdir(parents=True)
+            active = {"path": old}
+            calls = []
+            verified = VerifiedRelease(
+                ReleaseManifest("1.2.3", self.manifest["artifact_url"], self.manifest["sha256"], len(self.artifact), "Test release"),
+                self.artifact,
+            )
+            coordinator = UpdateCoordinator(root, runner=lambda args, **kwargs: calls.append(args),
+                health_check=lambda: True, get_active=lambda: active["path"],
+                switch_active=lambda target: active.update(path=target))
+            staged = coordinator.stage(verified)
+
+            result = coordinator.apply(staged.staged_id)
+
+            self.assertTrue(result.success)
+            install_command = next(args for args in calls if "pip" in args)
+            self.assertEqual(Path(install_command[-1]).name, "bt_signature_detector-1.2.3-py3-none-any.whl")
+
     def test_asset_install_failure_restores_old_web_service_after_slot_rollback(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "app"
