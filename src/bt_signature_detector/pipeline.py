@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import re
 from typing import Sequence
@@ -8,7 +9,7 @@ from typing import Sequence
 from .builtin_rules import BuiltInRule
 from .detection_scoring import CrossProtocolScorer, RuleHit
 from .models import Advertisement, Confidence, DetectionEvent, Signature
-from .signatures import match_signature
+from .signatures import match_signature, match_wifi_signature
 from .state import DetectionFilter
 from .wifi_scanner import WifiObservation, match_wifi_rules
 
@@ -53,6 +54,8 @@ class DetectionPipeline:
         self._builtin_last_alert: dict[tuple[str, str], datetime] = {}
         self._builtin_cooldown = timedelta(seconds=cooldown_seconds)
         self.filter = DetectionFilter(cooldown_seconds=cooldown_seconds,
+            absence_seconds=absence_seconds, global_min_rssi=global_min_rssi)
+        self.wifi_filter = DetectionFilter(cooldown_seconds=cooldown_seconds,
             absence_seconds=absence_seconds, global_min_rssi=global_min_rssi)
         self.advertisements_processed = 0
         self.store_errors = 0
@@ -106,33 +109,39 @@ class DetectionPipeline:
 
     def process_wifi_observation(self, observation: WifiObservation) -> list[DetectionEvent]:
         """Store qualifying Wi-Fi hits; raw observations stay in the volatile cache."""
-        if self.builtin_scorer is None:
-            return []
-        events: list[DetectionEvent] = []
-        for rule in match_wifi_rules(self.builtin_rules, observation):
-            scored = self.builtin_scorer.observe(RuleHit(
-                rule=rule, protocol="wifi", observed_identifier=observation.bssid,
-                observed_name=None, observed_ssid=observation.ssid,
-                observed_at=observation.observed_at))
-            if not scored.qualifies:
-                continue
-            key = (rule.rule_id, observation.bssid.casefold())
-            previous = self._builtin_last_alert.get(key)
-            if previous is not None and observation.observed_at - previous < self._builtin_cooldown:
-                continue
-            self._builtin_last_alert[key] = observation.observed_at
-            events.append(DetectionEvent(
-                signature_id=f"builtin:{rule.rule_id}", signature_name=rule.vendor,
-                confidence=Confidence.POSSIBLE, observed_identifier=observation.bssid,
-                first_seen=observation.observed_at, last_seen=observation.observed_at,
-                strongest_rssi=observation.signal, observation_count=1,
-                alert_enabled=True, protocol="wifi", vendor=rule.vendor,
-                base_score=scored.base_score, correlation_bonus=scored.correlation_bonus,
-                effective_score=scored.effective_score,
-                source_note="; ".join(value for value in (rule.source, rule.notes) if value),
-                observed_ssid=observation.ssid))
+        pseudo = Advertisement(identifier=observation.bssid, name=observation.ssid or None,
+            rssi=observation.signal, timestamp=observation.observed_at)
+        custom = self.wifi_filter.observe(pseudo,
+            [signature for signature in self.signatures if match_wifi_signature(signature, observation)])
+        events = [replace(event, protocol="wifi", observed_ssid=observation.ssid) for event in custom]
+        if self.builtin_scorer is not None:
+            for rule in match_wifi_rules(self.builtin_rules, observation):
+                scored = self.builtin_scorer.observe(RuleHit(
+                    rule=rule, protocol="wifi", observed_identifier=observation.bssid,
+                    observed_name=None, observed_ssid=observation.ssid,
+                    observed_at=observation.observed_at))
+                if not scored.qualifies:
+                    continue
+                key = (rule.rule_id, observation.bssid.casefold())
+                previous = self._builtin_last_alert.get(key)
+                if previous is not None and observation.observed_at - previous < self._builtin_cooldown:
+                    continue
+                self._builtin_last_alert[key] = observation.observed_at
+                events.append(DetectionEvent(
+                    signature_id=f"builtin:{rule.rule_id}", signature_name=rule.vendor,
+                    confidence=Confidence.POSSIBLE, observed_identifier=observation.bssid,
+                    first_seen=observation.observed_at, last_seen=observation.observed_at,
+                    strongest_rssi=observation.signal, observation_count=1,
+                    alert_enabled=True, protocol="wifi", vendor=rule.vendor,
+                    base_score=scored.base_score, correlation_bonus=scored.correlation_bonus,
+                    effective_score=scored.effective_score,
+                    source_note="; ".join(value for value in (rule.source, rule.notes) if value),
+                    observed_ssid=observation.ssid))
         for event in events:
-            logger.info("built-in Wi-Fi detection vendor=%s score=%s", event.vendor, event.effective_score)
+            if event.vendor:
+                logger.info("built-in Wi-Fi detection vendor=%s score=%s", event.vendor, event.effective_score)
+            else:
+                logger.info("Wi-Fi watch rule matched signature=%s", event.signature_id)
             self._record_event(event)
         return events
 

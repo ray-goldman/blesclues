@@ -64,25 +64,20 @@
         <span id="wifi-device-state" class="state-tag waiting"><i></i>Checking radio</span>
       </div>
       <p id="wifi-device-note" class="section-note device-wifi-note">Wi-Fi scanning is optional and uses the same setting as Live Feed. Network observations stay in temporary memory.</p>
-      <div class="feed-table-wrap device-wifi-table-wrap">
-        <table class="feed-table device-wifi-table">
-          <thead><tr><th>Network name</th><th>BSSID</th><th>Signal</th><th>Channel</th><th>Security</th><th>Seen</th></tr></thead>
-          <tbody id="wifi-device-rows"><tr><td colspan="6" class="empty-state">Checking Wi-Fi scan mode…</td></tr></tbody>
-        </table>
-      </div>
+      <div id="wifi-device-cards" class="wifi-device-grid"><p class="empty-state">Checking Wi-Fi scan mode…</p></div>
     </section>
     <p id="devices-error" class="error-message" role="status"></p>
     <div id="device-action-error" class="action-error" role="alert" hidden><p id="device-action-error-text"></p><button id="dismiss-device-error" class="outline-button" type="button">Dismiss</button></div>
   </main>
   <dialog id="watch-dialog" class="watch-dialog">
     <form id="watch-rule-form">
-      <div class="section-heading dialog-heading"><div><p class="kicker">SAVE OBSERVATION</p><h2>Watch this device</h2></div><button id="close-watch" class="quiet-button" type="button">Close</button></div>
+      <div class="section-heading dialog-heading"><div><p class="kicker">SAVE OBSERVATION</p><h2 id="watch-dialog-title">Watch this device</h2></div><button id="close-watch" class="quiet-button" type="button">Close</button></div>
       <p id="watch-address-note" class="address-warning"></p>
       <label class="field">Rule name<input name="label" maxlength="120" required></label>
       <label class="field">Watch list<input name="list_name" maxlength="80" list="watch-list-options" required placeholder="Choose or name a list"><datalist id="watch-list-options"></datalist></label>
       <label class="field">How should criteria combine?<select name="match_mode"><option value="all">All selected criteria</option><option value="any">Any selected criterion</option></select></label>
       <fieldset class="watch-criteria"><legend>Use these observed characteristics</legend><div id="watch-criteria-options"></div></fieldset>
-      <p class="field-note">Rules need at least three matching observations. They start with notifications off. BLE addresses can rotate.</p>
+      <p class="field-note">Rules need at least three matching observations and start with notifications off. Wi-Fi rules are saved even when Wi-Fi scanning is disabled.</p>
       <p id="watch-form-error" class="error-message" role="status"></p>
       <div class="settings-footer"><button class="primary-button" type="submit">Save rule</button><button id="cancel-watch" class="outline-button" type="button">Cancel</button></div>
     </form>

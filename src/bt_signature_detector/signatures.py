@@ -128,7 +128,7 @@ def load_signatures(path: Path) -> tuple[Signature, ...]:
         raise ValueError(f"{path}: unable to load signatures: {exc}") from exc
     if not isinstance(data, dict) or data.get("schema_version") != 1 or not isinstance(data.get("signatures"), list):
         raise ValueError(f"{path}: expected schema_version 1 and signatures list")
-    allowed = {"id", "label", "confidence", "match_mode", "manufacturer_data", "manufacturer_ids", "service_uuids", "service_data", "name_exact", "name_contains", "name_regex", "observed_identifiers", "identifier_prefixes", "min_rssi", "min_observations", "evidence", "alert_enabled", "watchlist", "enabled"}
+    allowed = {"id", "label", "confidence", "match_mode", "manufacturer_data", "manufacturer_ids", "service_uuids", "service_data", "name_exact", "name_contains", "name_regex", "observed_identifiers", "identifier_prefixes", "min_rssi", "min_observations", "evidence", "alert_enabled", "watchlist", "enabled", "protocol", "ssid_exact", "ssid_contains", "ssid_regex", "bssid_exact", "bssid_prefixes", "wifi_channels", "wifi_security"}
     result = []
     seen = set()
     watchlists: dict[str, str] = {}
@@ -221,6 +221,57 @@ def load_signatures(path: Path) -> tuple[Signature, ...]:
         identifier_prefixes = tuple(dict.fromkeys(value.lower() for value in identifier_prefixes_raw))
         if identifier_prefixes:
             predicates.append(True)
+        protocol = item.get("protocol", "ble")
+        if not isinstance(protocol, str) or protocol not in {"ble", "wifi"}:
+            raise ValueError(f"{prefix}.protocol must be ble or wifi")
+        ssid_exact, ssid_contains, ssid_regex = item.get("ssid_exact"), item.get("ssid_contains"), item.get("ssid_regex")
+        if sum(value is not None for value in (ssid_exact, ssid_contains, ssid_regex)) > 1:
+            raise ValueError(f"{prefix} may define only one SSID predicate")
+        ssid_pattern = ssid_exact if ssid_exact is not None else ssid_contains if ssid_contains is not None else ssid_regex
+        if ssid_pattern is not None:
+            if not isinstance(ssid_pattern, str) or not ssid_pattern or len(ssid_pattern.encode("utf-8")) > 32:
+                raise ValueError(f"{prefix} SSID predicate must be non-empty and at most 32 UTF-8 bytes")
+            if ssid_regex is not None:
+                try:
+                    re.compile(ssid_regex)
+                except re.error as exc:
+                    raise ValueError(f"{prefix}.ssid_regex is invalid: {exc}") from exc
+                if _has_ambiguous_repetition(ssid_regex):
+                    raise ValueError(f"{prefix}.ssid_regex uses nested or ambiguous repetition; simplify it to keep scanning responsive")
+            predicates.append(True)
+        bssid_exact = item.get("bssid_exact")
+        if bssid_exact is not None:
+            if not isinstance(bssid_exact, str) or not re.fullmatch(r"[0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5}", bssid_exact):
+                raise ValueError(f"{prefix}.bssid_exact must be a MAC address")
+            bssid_exact = bssid_exact.lower()
+            predicates.append(True)
+        bssid_prefixes_raw = item.get("bssid_prefixes", [])
+        if (not isinstance(bssid_prefixes_raw, list) or len(bssid_prefixes_raw) > MAX_CRITERION_VALUES
+                or not all(isinstance(value, str) and re.fullmatch(r"(?:[0-9a-fA-F]{2}:){0,2}[0-9a-fA-F]{2}", value) for value in bssid_prefixes_raw)):
+            raise ValueError(f"{prefix}.bssid_prefixes must contain one to three complete MAC octets")
+        bssid_prefixes = tuple(dict.fromkeys(value.lower() for value in bssid_prefixes_raw))
+        if bssid_prefixes:
+            predicates.append(True)
+        wifi_channels_raw = item.get("wifi_channels", [])
+        if (not isinstance(wifi_channels_raw, list) or len(wifi_channels_raw) > MAX_CRITERION_VALUES
+                or not all(not isinstance(value, bool) and isinstance(value, int) and 1 <= value <= 233 for value in wifi_channels_raw)):
+            raise ValueError(f"{prefix}.wifi_channels must contain channel numbers from 1 to 233")
+        wifi_channels = tuple(dict.fromkeys(wifi_channels_raw))
+        if wifi_channels:
+            predicates.append(True)
+        wifi_security_raw = item.get("wifi_security", [])
+        if (not isinstance(wifi_security_raw, list) or len(wifi_security_raw) > 3
+                or not all(isinstance(value, str) and value in {"WPA", "WEP", "Open / unknown"} for value in wifi_security_raw)):
+            raise ValueError(f"{prefix}.wifi_security contains an unsupported security value")
+        wifi_security = tuple(dict.fromkeys(wifi_security_raw))
+        if wifi_security:
+            predicates.append(True)
+        ble_criteria = bool(manufacturer_id is not None or manufacturer_ids or service_uuids or service_data or name_pattern is not None or exact_identifiers or identifier_prefixes)
+        wifi_criteria = bool(ssid_pattern is not None or bssid_exact is not None or bssid_prefixes or wifi_channels or wifi_security)
+        if protocol == "wifi" and (ble_criteria or not wifi_criteria):
+            raise ValueError(f"{prefix} Wi-Fi rules need Wi-Fi criteria and cannot contain BLE criteria")
+        if protocol == "ble" and wifi_criteria:
+            raise ValueError(f"{prefix} Wi-Fi criteria require protocol: wifi")
         if not predicates:
             raise ValueError(f"{prefix} must define at least one predicate")
         confidence_raw = item.get("confidence", "unknown")
@@ -259,11 +310,15 @@ def load_signatures(path: Path) -> tuple[Signature, ...]:
             service_uuids, service_data, name_pattern,
             "regex" if name_regex is not None else "contains" if name_contains is not None else "exact",
             exact_identifiers, min_rssi, observations, mode, evidence, alert_enabled, watchlist, enabled,
-            identifier_prefixes, manufacturer_ids))
+            identifier_prefixes, manufacturer_ids, protocol,
+            ssid_pattern, "regex" if ssid_regex is not None else "contains" if ssid_contains is not None else "exact",
+            bssid_exact, bssid_prefixes, wifi_channels, wifi_security))
     return tuple(result)
 
 
 def match_signature(signature: Signature, advertisement: Advertisement) -> bool:
+    if signature.protocol != "ble":
+        return False
     checks = []
     if signature.manufacturer_id is not None and signature.manufacturer_pattern is not None:
         observed = advertisement.manufacturer_data.get(signature.manufacturer_id)
@@ -291,4 +346,29 @@ def match_signature(signature: Signature, advertisement: Advertisement) -> bool:
     if signature.identifier_prefixes:
         identifier = advertisement.identifier.lower()
         checks.append(any(identifier.startswith(prefix) for prefix in signature.identifier_prefixes))
+    return bool(checks) and (all(checks) if signature.match_mode == "all" else any(checks))
+
+
+def match_wifi_signature(signature: Signature, observation) -> bool:
+    if signature.protocol != "wifi":
+        return False
+    checks = []
+    if signature.ssid_pattern is not None:
+        ssid = observation.ssid or ""
+        if signature.ssid_mode == "regex":
+            checks.append(re.search(signature.ssid_pattern, ssid) is not None)
+        elif signature.ssid_mode == "contains":
+            checks.append(signature.ssid_pattern.casefold() in ssid.casefold())
+        else:
+            checks.append(ssid == signature.ssid_pattern)
+    bssid = (observation.bssid or "").lower()
+    if signature.bssid_exact is not None:
+        checks.append(bssid == signature.bssid_exact)
+    if signature.bssid_prefixes:
+        checks.append(any(bssid.startswith(prefix) for prefix in signature.bssid_prefixes))
+    if signature.wifi_channels:
+        checks.append(observation.channel in signature.wifi_channels)
+    if signature.wifi_security:
+        security = observation.security or "Open / unknown"
+        checks.append(security in signature.wifi_security)
     return bool(checks) and (all(checks) if signature.match_mode == "all" else any(checks))
