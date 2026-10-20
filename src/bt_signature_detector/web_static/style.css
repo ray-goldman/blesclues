@@ -216,7 +216,7 @@ h2 { margin: 0; font-size: 15px; line-height: 1.25; letter-spacing: -.02em; font
 .error-message { color: var(--red); font-size: 10px; line-height: 1.5; }
 main > .error-message:empty { display: none; }
 
-@media (max-width: 1400px) {
+@media (max-width: 1800px) {
   .device-table-wrap { overflow: visible; padding: 0 14px 14px; }
   .device-table, .device-table tbody { display: block; width: 100%; min-width: 0; }
   .device-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
