@@ -27,6 +27,13 @@ function renderWifiDevices(observations, status) {
   const note = document.getElementById('wifi-device-note');
   if (!target || !state || !note) return;
 
+  if (pausedInventory) {
+    state.className = 'state-tag waiting';
+    state.innerHTML = '<i></i>Paused';
+    note.textContent = 'Showing the Wi-Fi networks seen before the scan was paused. Resume the device scan to refresh results.';
+    return;
+  }
+
   if (status.scan_active) {
     state.className = 'state-tag ready';
     state.innerHTML = '<i></i>Scanning';
