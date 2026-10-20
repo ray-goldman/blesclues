@@ -10,9 +10,9 @@ Use a Raspberry Pi 3 Model B or newer with Raspberry Pi OS Lite Bookworm or late
 AP_COUNTRY=US sudo -E bash scripts/install.sh
 ```
 
-Replace `US` with the appropriate country code. Connect the Pi to Ethernet and open `http://<Pi Ethernet IP>:8080`. The installer prints a one-time dashboard password. Save it, sign in, and change it in **Settings**.
+Replace `US` with the appropriate country code. Connect the Pi to Ethernet and open `https://<Pi Ethernet IP>:8080`. The dashboard uses a locally generated self-signed TLS certificate; the browser will show a certificate warning until you trust that certificate on your device. The installer prints a one-time dashboard password. Save it, sign in, and change it in **Settings**.
 
-The hidden `Detector-Admin` Wi-Fi network is optional and disabled by default. Enable it in **Settings** when needed. Its factory password is `easypassword`, and the dashboard is available at `http://192.168.4.1:8080`. The hotspot provides local access and does not forward internet traffic. Keep the dashboard password separate from the Wi-Fi password.
+The hidden `Detector-Admin` Wi-Fi network is optional and disabled by default. Enable it in **Settings** when needed. Its factory password is `easypassword`, and the dashboard is available at `https://192.168.4.1:8080`. The hotspot provides local access and does not forward internet traffic. Keep the dashboard password separate from the Wi-Fi password.
 
 The example passive Bluetooth filter uses synthetic bytes. Configure `bluetooth.or_patterns` in `/etc/bt-signature-detector/detector.yaml` for the adapter and advertisements you intend to observe before expecting passive results. See [Raspberry Pi installation](docs/raspberry-pi-install.md).
 

@@ -11,7 +11,7 @@ dependencies = [
     "PyYAML>=6.0",
     "bleak>=3.0.0",
     "Flask>=3.0",
-    "waitress>=3.0",
+    "gunicorn>=23.0,<24",
     "cryptography>=43.0",
 ]
 
