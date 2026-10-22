@@ -62,6 +62,9 @@ class DetectionPipeline:
 
     def process(self, advertisement: Advertisement) -> list[DetectionEvent]:
         self.advertisements_processed += 1
+        if any(signature.enabled and signature.ignorelist and match_signature(signature, advertisement)
+               for signature in self.signatures):
+            return []
         if self.scan_cache is not None:
             try: self.scan_cache.add(advertisement)
             except OSError:
@@ -70,7 +73,8 @@ class DetectionPipeline:
             try: self.device_cache.add(advertisement)
             except OSError:
                 logger.warning("runtime device cache is unavailable", exc_info=True)
-        matches = [signature for signature in self.signatures if match_signature(signature, advertisement)]
+        matches = [signature for signature in self.signatures if signature.ignorelist is None
+                   and match_signature(signature, advertisement)]
         events = self.filter.observe(advertisement, matches)
         if self.builtin_rules and self.builtin_scorer is not None:
             for rule in match_ble_rules(self.builtin_rules, advertisement):
@@ -109,10 +113,14 @@ class DetectionPipeline:
 
     def process_wifi_observation(self, observation: WifiObservation) -> list[DetectionEvent]:
         """Store qualifying Wi-Fi hits; raw observations stay in the volatile cache."""
+        if any(signature.enabled and signature.ignorelist and match_wifi_signature(signature, observation)
+               for signature in self.signatures):
+            return []
         pseudo = Advertisement(identifier=observation.bssid, name=observation.ssid or None,
             rssi=observation.signal, timestamp=observation.observed_at)
         custom = self.wifi_filter.observe(pseudo,
-            [signature for signature in self.signatures if match_wifi_signature(signature, observation)])
+            [signature for signature in self.signatures if signature.ignorelist is None
+             and match_wifi_signature(signature, observation)])
         events = [replace(event, protocol="wifi", observed_ssid=observation.ssid) for event in custom]
         if self.builtin_scorer is not None:
             for rule in match_wifi_rules(self.builtin_rules, observation):

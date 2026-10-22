@@ -74,7 +74,8 @@
       <div class="section-heading dialog-heading"><div><p class="kicker">SAVE OBSERVATION</p><h2 id="watch-dialog-title">Watch this device</h2></div><button id="close-watch" class="quiet-button" type="button">Close</button></div>
       <p id="watch-address-note" class="address-warning"></p>
       <label class="field">Rule name<input name="label" maxlength="120" required></label>
-      <label class="field">Watch list<input name="list_name" maxlength="80" list="watch-list-options" required placeholder="Choose or name a list"><datalist id="watch-list-options"></datalist></label>
+      <label class="field">Save as<select name="rule_target"><option value="watch">Watch · flag future matches</option><option value="ignore">Ignore · hide from live view</option></select></label>
+      <label class="field"><span id="rule-list-label">Watch list</span><input name="list_name" maxlength="80" list="watch-list-options" required placeholder="Choose or name a list"><datalist id="watch-list-options"></datalist></label>
       <label class="field">How should criteria combine?<select name="match_mode"><option value="all">All selected criteria</option><option value="any">Any selected criterion</option></select></label>
       <fieldset class="watch-criteria"><legend>Use these observed characteristics</legend><div id="watch-criteria-options"></div></fieldset>
       <p class="field-note">Rules need at least three matching observations and start with notifications off. Wi-Fi rules are saved even when Wi-Fi scanning is disabled.</p>

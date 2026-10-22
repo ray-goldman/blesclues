@@ -62,6 +62,20 @@ signatures:
         self.assertEqual(self.post("/api/watchlists/delete", {"name": "Other"}).status_code, 200)
         self.assertEqual([sig.signature_id for sig in self.store.list_signatures()], ["builtin"])
 
+    def test_ignore_list_api_reuses_rule_criteria_and_crud_contract(self):
+        created = self.post("/api/ignorelists/rules", {"label": "Quiet beacon", "list_name": "Quiet", "name_regex": "^Axon-[0-9]+$", "identifier_prefixes": ["aa:bb:cc"]})
+        self.assertEqual(created.status_code, 201, created.json)
+        rule = created.json["rule"]
+        self.assertEqual(rule["ignorelist_name"], "Quiet")
+        self.assertEqual(rule["criteria"]["name_regex"], "^Axon-[0-9]+$")
+        self.assertEqual(self.client.get("/api/ignorelists").json["ignorelists"][0]["rules"][0]["id"], rule["id"])
+        self.assertEqual(self.post("/api/ignorelists/rename", {"old_name": "Quiet", "new_name": "Muted"}).status_code, 200)
+        self.assertEqual(self.post(f"/api/ignorelists/rules/{rule['id']}/enabled", {"enabled": False}).status_code, 200)
+        listed = self.client.get("/api/ignorelists").json["ignorelists"][0]
+        self.assertEqual(listed["name"], "Muted")
+        self.assertFalse(listed["rules"][0]["enabled"])
+        self.assertEqual(self.client.delete(f"/api/ignorelists/rules/{rule['id']}", headers={"X-CSRF-Token": self.csrf()}).status_code, 200)
+
     def test_auth_and_csrf_reject_every_mutation_before_store_or_restart(self):
         unauth = self.app.test_client()
         calls = self.restart_calls
@@ -118,6 +132,16 @@ signatures:
         self.assertEqual(rule["criteria"]["manufacturer_ids"], [76])
         response = self.post("/api/watchlists/rules", {"label": "Bad", "list_name": "Home", "service_uuids": ["nope"]})
         self.assertEqual(response.status_code, 400)
+
+    def test_ignore_rules_filter_current_wifi_observations_but_not_event_history(self):
+        self.store.create_ignore_rule({"label": "Lab network", "list_name": "Quiet Wi-Fi", "protocol": "wifi", "ssid_regex": "^Lab-"})
+        services = self.app.extensions["web_services"]
+        services.wifi_observations = lambda: [
+            {"ssid": "Lab-Camera", "bssid": "00:11:22:33:44:55", "signal": -50, "channel": 6, "security": "WPA", "observed_at": "2026-10-21T12:00:00+00:00"},
+            {"ssid": "Guest", "bssid": "00:11:22:33:44:66", "signal": -60, "channel": 11, "security": "WPA", "observed_at": "2026-10-21T12:00:00+00:00"},
+        ]
+        response = self.client.get("/api/wifi/observations")
+        self.assertEqual([item["ssid"] for item in response.json["observations"]], ["Guest"])
 
     def test_manufacturer_names_enrich_watch_rule_and_scans_keep_unknown_ids(self):
         self.post("/api/watchlists/rules", {"label": "Apple beacon", "list_name": "Devices", "manufacturer_data": {"76": "AABB"}})

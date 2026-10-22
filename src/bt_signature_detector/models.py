@@ -63,6 +63,7 @@ class Signature:
     bssid_prefixes: tuple[str, ...] = ()
     wifi_channels: tuple[int, ...] = ()
     wifi_security: tuple[str, ...] = ()
+    ignorelist: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "service_uuids", tuple(self.service_uuids))

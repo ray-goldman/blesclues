@@ -66,12 +66,18 @@ class WatchListStore:
             return result
 
     def create_rule(self, rule_data: Mapping[str, object]) -> Signature:
+        return self._create_rule(rule_data, "watchlist")
+
+    def create_ignore_rule(self, rule_data: Mapping[str, object]) -> Signature:
+        return self._create_rule(rule_data, "ignorelist")
+
+    def _create_rule(self, rule_data: Mapping[str, object], list_field: str) -> Signature:
         allowed = {"label", "list_name", "match_mode", "observed_identifiers", "identifier_prefixes", "name_exact", "name_contains", "name_regex",
                    "manufacturer_data", "manufacturer_ids", "service_uuids", "service_data", "protocol", "ssid_exact", "ssid_contains", "ssid_regex",
                    "bssid_exact", "bssid_prefixes", "wifi_channels", "wifi_security"}
         unknown = set(rule_data) - allowed
         if unknown:
-            raise ValueError(f"{sorted(unknown)[0]} is not a supported watch rule field")
+            raise ValueError(f"{sorted(unknown)[0]} is not a supported rule field")
         label = rule_data.get("label")
         list_name = rule_data.get("list_name")
         if not isinstance(label, str) or not 1 <= len(label.strip()) <= 120:
@@ -87,7 +93,7 @@ class WatchListStore:
             "match_mode": rule_data.get("match_mode", "all"),
             "min_observations": 3,
             "alert_enabled": False,
-            "watchlist": list_name,
+            list_field: list_name,
             "enabled": True,
         }
         rule.update({key: value for key, value in rule_data.items() if key not in {"label", "list_name"}})
@@ -96,8 +102,9 @@ class WatchListStore:
             rows = data["signatures"]
             assert isinstance(rows, list)
             existing = load_signatures(self.path)
-            canonical = next((sig.watchlist for sig in existing if sig.watchlist and sig.watchlist.casefold() == list_name.casefold()), list_name)
-            rule["watchlist"] = canonical
+            canonical = next((getattr(sig, list_field) for sig in existing
+                              if getattr(sig, list_field) and getattr(sig, list_field).casefold() == list_name.casefold()), list_name)
+            rule[list_field] = canonical
             rows.append(rule)
             self._validate_data(data)
             return next(sig for sig in load_signatures_from_data(data, self.path) if sig.signature_id == rule["id"])
@@ -105,6 +112,12 @@ class WatchListStore:
         return self._mutate(add)
 
     def rename_list(self, old_name: str, new_name: str) -> None:
+        self._rename_list(old_name, new_name, "watchlist")
+
+    def rename_ignore_list(self, old_name: str, new_name: str) -> None:
+        self._rename_list(old_name, new_name, "ignorelist")
+
+    def _rename_list(self, old_name: str, new_name: str, list_field: str) -> None:
         if not isinstance(old_name, str) or not 1 <= len(old_name.strip()) <= 80:
             raise ValueError("old_name must be 1 to 80 characters")
         if not isinstance(new_name, str) or not 1 <= len(new_name.strip()) <= 80:
@@ -116,40 +129,58 @@ class WatchListStore:
             rows = data["signatures"]
             assert isinstance(rows, list)
             signatures = load_signatures(self.path)
-            matched = [sig for sig in signatures if sig.watchlist and sig.watchlist.casefold() == old_key]
+            matched = [sig for sig in signatures if getattr(sig, list_field) and getattr(sig, list_field).casefold() == old_key]
             if not matched:
-                raise ValueError("watch list was not found")
-            if any(sig.watchlist and sig.watchlist.casefold() == new_key and sig.watchlist.casefold() != old_key for sig in signatures):
-                raise ValueError("a watch list with that name already exists")
+                raise ValueError("list was not found")
+            if any(getattr(sig, list_field) and getattr(sig, list_field).casefold() == new_key and getattr(sig, list_field).casefold() != old_key for sig in signatures):
+                raise ValueError("a list with that name already exists")
             for row in rows:
-                if isinstance(row, dict) and isinstance(row.get("watchlist"), str) and row["watchlist"].strip().casefold() == old_key:
-                    row["watchlist"] = new_name
+                if isinstance(row, dict) and isinstance(row.get(list_field), str) and row[list_field].strip().casefold() == old_key:
+                    row[list_field] = new_name
             self._validate_data(data)
 
         self._mutate(rename)
 
     def set_enabled(self, signature_id: str, enabled: bool) -> None:
+        self._set_enabled(signature_id, enabled, ("watchlist",))
+
+    def set_ignore_rule_enabled(self, signature_id: str, enabled: bool) -> None:
+        self._set_enabled(signature_id, enabled, ("ignorelist",))
+
+    def _set_enabled(self, signature_id: str, enabled: bool, allowed_fields: tuple[str, ...]) -> None:
         if not isinstance(enabled, bool):
             raise ValueError("enabled must be true or false")
 
         def set_value(data: dict[str, object]) -> None:
-            row = self._find_rule(data, signature_id)
+            row = self._find_rule(data, signature_id, allowed_fields)
             row["enabled"] = enabled
             self._validate_data(data)
 
         self._mutate(set_value)
 
     def delete_rule(self, signature_id: str) -> None:
+        self._delete_rule(signature_id, ("watchlist",))
+
+    def delete_ignore_rule(self, signature_id: str) -> None:
+        self._delete_rule(signature_id, ("ignorelist",))
+
+    def _delete_rule(self, signature_id: str, allowed_fields: tuple[str, ...]) -> None:
         def delete(data: dict[str, object]) -> None:
             rows = data["signatures"]
             assert isinstance(rows, list)
-            target = self._find_rule(data, signature_id)
+            target = self._find_rule(data, signature_id, allowed_fields)
             rows.remove(target)
             self._validate_data(data)
 
         self._mutate(delete)
 
     def delete_list(self, name: str) -> None:
+        self._delete_list(name, "watchlist")
+
+    def delete_ignore_list(self, name: str) -> None:
+        self._delete_list(name, "ignorelist")
+
+    def _delete_list(self, name: str, list_field: str) -> None:
         if not isinstance(name, str) or not 1 <= len(name.strip()) <= 80:
             raise ValueError("name must be 1 to 80 characters")
         key = name.strip().casefold()
@@ -157,10 +188,10 @@ class WatchListStore:
         def delete(data: dict[str, object]) -> None:
             rows = data["signatures"]
             assert isinstance(rows, list)
-            kept = [row for row in rows if not (isinstance(row, dict) and isinstance(row.get("watchlist"), str)
-                    and row["watchlist"].strip().casefold() == key)]
+            kept = [row for row in rows if not (isinstance(row, dict) and isinstance(row.get(list_field), str)
+                    and row[list_field].strip().casefold() == key)]
             if len(kept) == len(rows):
-                raise ValueError("watch list was not found")
+                raise ValueError("list was not found")
             data["signatures"] = kept
             self._validate_data(data)
 
@@ -195,12 +226,13 @@ class WatchListStore:
             except FileNotFoundError:
                 pass
 
-    def _find_rule(self, data: dict[str, object], signature_id: str) -> dict[str, object]:
+    def _find_rule(self, data: dict[str, object], signature_id: str,
+                   allowed_fields: tuple[str, ...] = ("watchlist",)) -> dict[str, object]:
         rows = data["signatures"]
         assert isinstance(rows, list)
         for row in rows:
             if isinstance(row, dict) and row.get("id") == signature_id:
-                if not isinstance(row.get("watchlist"), str):
+                if not any(isinstance(row.get(field), str) for field in allowed_fields):
                     raise ValueError("built-in signatures cannot be changed here")
                 return row
         raise ValueError("watch rule was not found")

@@ -128,10 +128,11 @@ def load_signatures(path: Path) -> tuple[Signature, ...]:
         raise ValueError(f"{path}: unable to load signatures: {exc}") from exc
     if not isinstance(data, dict) or data.get("schema_version") != 1 or not isinstance(data.get("signatures"), list):
         raise ValueError(f"{path}: expected schema_version 1 and signatures list")
-    allowed = {"id", "label", "confidence", "match_mode", "manufacturer_data", "manufacturer_ids", "service_uuids", "service_data", "name_exact", "name_contains", "name_regex", "observed_identifiers", "identifier_prefixes", "min_rssi", "min_observations", "evidence", "alert_enabled", "watchlist", "enabled", "protocol", "ssid_exact", "ssid_contains", "ssid_regex", "bssid_exact", "bssid_prefixes", "wifi_channels", "wifi_security"}
+    allowed = {"id", "label", "confidence", "match_mode", "manufacturer_data", "manufacturer_ids", "service_uuids", "service_data", "name_exact", "name_contains", "name_regex", "observed_identifiers", "identifier_prefixes", "min_rssi", "min_observations", "evidence", "alert_enabled", "watchlist", "ignorelist", "enabled", "protocol", "ssid_exact", "ssid_contains", "ssid_regex", "bssid_exact", "bssid_prefixes", "wifi_channels", "wifi_security"}
     result = []
     seen = set()
     watchlists: dict[str, str] = {}
+    ignorelists: dict[str, str] = {}
     for index, item in enumerate(data["signatures"]):
         prefix = f"signatures[{index}]"
         if not isinstance(item, dict):
@@ -288,18 +289,27 @@ def load_signatures(path: Path) -> tuple[Signature, ...]:
         alert_enabled = item.get("alert_enabled", False)
         if not isinstance(alert_enabled, bool): raise ValueError(f"{prefix}.alert_enabled must be true or false")
         watchlist = item.get("watchlist")
-        if watchlist is not None:
-            if not isinstance(watchlist, str):
-                raise ValueError(f"{prefix}.watchlist must be a string")
-            watchlist = watchlist.strip()
-            if not watchlist or len(watchlist) > 80:
-                raise ValueError(f"{prefix}.watchlist must be 1 to 80 characters after trimming")
-            normalized_watchlist = watchlist.casefold()
-            existing_name = watchlists.get(normalized_watchlist)
+        ignorelist = item.get("ignorelist")
+        if watchlist is not None and ignorelist is not None:
+            raise ValueError(f"{prefix} may use watchlist or ignorelist, not both")
+        for field_name, value, names in (("watchlist", watchlist, watchlists), ("ignorelist", ignorelist, ignorelists)):
+            if value is None:
+                continue
+            if not isinstance(value, str):
+                raise ValueError(f"{prefix}.{field_name} must be a string")
+            value = value.strip()
+            if not value or len(value) > 80:
+                raise ValueError(f"{prefix}.{field_name} must be 1 to 80 characters after trimming")
+            normalized = value.casefold()
+            existing_name = names.get(normalized)
             if existing_name is not None:
-                watchlist = existing_name
+                value = existing_name
             else:
-                watchlists[normalized_watchlist] = watchlist
+                names[normalized] = value
+            if field_name == "watchlist":
+                watchlist = value
+            else:
+                ignorelist = value
         enabled = item.get("enabled", True)
         if not isinstance(enabled, bool):
             raise ValueError(f"{prefix}.enabled must be true or false")
@@ -312,7 +322,7 @@ def load_signatures(path: Path) -> tuple[Signature, ...]:
             exact_identifiers, min_rssi, observations, mode, evidence, alert_enabled, watchlist, enabled,
             identifier_prefixes, manufacturer_ids, protocol,
             ssid_pattern, "regex" if ssid_regex is not None else "contains" if ssid_contains is not None else "exact",
-            bssid_exact, bssid_prefixes, wifi_channels, wifi_security))
+            bssid_exact, bssid_prefixes, wifi_channels, wifi_security, ignorelist))
     return tuple(result)
 
 

@@ -185,14 +185,16 @@ function openWatchDialog(device, protocol = 'ble') {
         : '';
     return `<div class="watch-option"><label><input type="checkbox" data-watch-kind="${escapeHtml(item.kind)}" data-watch-index="${index}" ${item.checked === false ? '' : 'checked'}><span>${escapeHtml(item.label)}</span></label>${controls}</div>`;
   }).join('') || '<p class="empty-state">No matching characteristics were observed.</p>';
-  document.getElementById('watch-dialog-title').textContent = protocol === 'wifi' ? 'Watch this network' : 'Watch this device';
+  document.getElementById('watch-dialog-title').textContent = protocol === 'wifi' ? 'Save this network rule' : 'Save this device rule';
   document.getElementById('watch-address-note').textContent = protocol === 'wifi'
     ? 'SSID rules can match network names. BSSID rules use the access point address, which may change.'
     : device.identifier ? `Address ${device.identifier} can rotate. An address rule only matches this exact observed identifier.` : '';
   const form = document.getElementById('watch-rule-form');
   form.elements.label.value = protocol === 'wifi' ? device.ssid || 'Wi-Fi network' : device.name || 'BLE device';
   form.elements.list_name.value = '';
+  form.elements.rule_target.value = 'watch';
   form.elements.match_mode.value = 'all';
+  updateRuleTargetLabel();
   document.getElementById('watch-form-error').textContent = '';
   document.getElementById('watch-dialog').showModal();
   loadExistingWatchLists();
@@ -200,18 +202,28 @@ function openWatchDialog(device, protocol = 'ble') {
 
 async function loadExistingWatchLists() {
   try {
-    const response = await fetch('/api/watchlists', {credentials: 'same-origin'});
+    const target = document.getElementById('watch-rule-form').elements.rule_target.value;
+    const response = await fetch(target === 'ignore' ? '/api/ignorelists' : '/api/watchlists', {credentials: 'same-origin'});
     if (!response.ok) return;
     const result = await response.json();
-    document.getElementById('watch-list-options').innerHTML = (result.watchlists || []).map(item => `<option value="${escapeHtml(item.name)}"></option>`).join('');
+    const lists = target === 'ignore' ? result.ignorelists : result.watchlists;
+    document.getElementById('watch-list-options').innerHTML = (lists || []).map(item => `<option value="${escapeHtml(item.name)}"></option>`).join('');
   } catch (_) { /* Saving a new list remains available if the list lookup is offline. */ }
 }
+
+function updateRuleTargetLabel() {
+  const ignore = document.getElementById('watch-rule-form').elements.rule_target.value === 'ignore';
+  document.getElementById('rule-list-label').textContent = ignore ? 'Ignore list' : 'Watch list';
+  document.getElementById('watch-dialog-title').textContent = ignore ? 'Keep this out of live view' : 'Flag future matches';
+}
+document.getElementById('watch-rule-form').elements.rule_target.addEventListener('change', () => { updateRuleTargetLabel(); loadExistingWatchLists(); });
 
 document.getElementById('close-watch').addEventListener('click', () => document.getElementById('watch-dialog').close());
 document.getElementById('cancel-watch').addEventListener('click', () => document.getElementById('watch-dialog').close());
 document.getElementById('watch-rule-form').addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.currentTarget;
+  const target = form.elements.rule_target.value;
   const body = {label: form.elements.label.value.trim(), list_name: form.elements.list_name.value.trim(), match_mode: form.elements.match_mode.value};
   if (watchProtocol === 'wifi') body.protocol = 'wifi';
   const selected = [...document.querySelectorAll('#watch-criteria-options input:checked')];
@@ -271,12 +283,12 @@ document.getElementById('watch-rule-form').addEventListener('submit', async even
     return;
   }
   try {
-    const response = await fetch('/api/watchlists/rules', {method: 'POST', credentials: 'same-origin',
+    const response = await fetch(target === 'ignore' ? '/api/ignorelists/rules' : '/api/watchlists/rules', {method: 'POST', credentials: 'same-origin',
       headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf}, body: JSON.stringify(body)});
     const result = await response.json();
     if (!response.ok) throw Error(result.error || 'Could not save this watch rule.');
     document.getElementById('watch-dialog').close();
-    text('devices-error', `Saved “${result.rule.label}” to ${result.rule.watchlist_name || body.list_name}.`);
+    text('devices-error', `Saved “${result.rule.label}” to ${target === 'ignore' ? result.rule.ignorelist_name : result.rule.watchlist_name || body.list_name}.`);
     await loadDevices();
   } catch (error) {
     document.getElementById('watch-form-error').textContent = error.message;

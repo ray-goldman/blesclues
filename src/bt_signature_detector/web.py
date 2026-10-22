@@ -357,6 +357,25 @@ def create_app(services: WebServices) -> Flask:
     def api_wifi_observations():
         try:
             observations = services.wifi_observations()[-services.max_live_scans:]
+            if services.watchlists is not None:
+                from datetime import datetime
+                from .signatures import match_wifi_signature
+                from .wifi_scanner import WifiObservation
+                ignored = [signature for signature in services.watchlists.list_signatures()
+                           if signature.enabled and signature.ignorelist and signature.protocol == "wifi"]
+                def is_ignored(item):
+                    if not isinstance(item, dict):
+                        return False
+                    try:
+                        stamp = item.get("observed_at")
+                        if isinstance(stamp, str):
+                            stamp = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                        observation = WifiObservation(str(item.get("ssid") or ""), str(item["bssid"]),
+                            item.get("signal"), item.get("channel"), item.get("security"), stamp)
+                        return any(match_wifi_signature(signature, observation) for signature in ignored)
+                    except (KeyError, TypeError, ValueError):
+                        return False
+                observations = [item for item in observations if not is_ignored(item)]
             return jsonify({"observations": [_jsonable(item) for item in observations]})
         except (OSError, RuntimeError, ValueError) as exc:
             return jsonify({"error": str(exc)}), 503
@@ -460,7 +479,8 @@ def create_app(services: WebServices) -> Flask:
         coverage = watch_rule_filter_coverage(signature).status
         return {"id": signature.signature_id, "label": signature.name, "enabled": signature.enabled,
                 "protocol": signature.protocol,
-                "watchlist_name": signature.watchlist, "match_mode": signature.match_mode, "criteria": criteria, "filter_coverage": coverage,
+                "watchlist_name": signature.watchlist, "ignorelist_name": signature.ignorelist,
+                "match_mode": signature.match_mode, "criteria": criteria, "filter_coverage": coverage,
                 "manufacturer_names": {**manufacturer_names(criteria.get("manufacturer_data")),
                     **manufacturer_names(criteria.get("manufacturer_ids"))},
                 "confidence": signature.confidence.value, "min_observations": signature.min_observations,
@@ -489,6 +509,21 @@ def create_app(services: WebServices) -> Flask:
             lists = [{"name": name, "rules": sorted(rules, key=lambda rule: rule["label"].casefold())}
                      for name, rules in sorted(grouped.items(), key=lambda item: item[0].casefold())]
             return jsonify({"watchlists": lists})
+        except (OSError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 500
+
+    @app.get("/api/ignorelists")
+    @login_required
+    def api_ignorelists():
+        if services.watchlists is None: return jsonify({"error": "ignore lists are unavailable"}), 503
+        try:
+            grouped = {}
+            for signature in services.watchlists.list_signatures():
+                if signature.ignorelist is not None:
+                    grouped.setdefault(signature.ignorelist, []).append(watch_rule_data(signature))
+            lists = [{"name": name, "rules": sorted(rules, key=lambda rule: rule["label"].casefold())}
+                     for name, rules in sorted(grouped.items(), key=lambda item: item[0].casefold())]
+            return jsonify({"ignorelists": lists})
         except (OSError, ValueError) as exc:
             return jsonify({"error": str(exc)}), 500
 
@@ -538,6 +573,54 @@ def create_app(services: WebServices) -> Flask:
             return jsonify({"error": "name is required"}), 400
         if services.watchlists is None: return jsonify({"error": "watch lists are unavailable"}), 503
         result = run_watchlist_mutation(lambda: services.watchlists.delete_list(data["name"]))
+        return result if isinstance(result, tuple) else jsonify({"ok": True})
+
+    @app.post("/api/ignorelists/rules")
+    @login_required
+    def api_create_ignore_rule():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict): return jsonify({"error": "a JSON object is required"}), 400
+        if services.watchlists is None: return jsonify({"error": "ignore lists are unavailable"}), 503
+        result = run_watchlist_mutation(lambda: services.watchlists.create_ignore_rule(data))
+        if isinstance(result, tuple): return result
+        return jsonify({"rule": watch_rule_data(result)}), 201
+
+    @app.post("/api/ignorelists/rename")
+    @login_required
+    def api_rename_ignorelist():
+        data = request.get_json(silent=True)
+        if (not isinstance(data, dict) or set(data) != {"old_name", "new_name"}
+                or not isinstance(data["old_name"], str) or not isinstance(data["new_name"], str)):
+            return jsonify({"error": "old_name and new_name are required"}), 400
+        if services.watchlists is None: return jsonify({"error": "ignore lists are unavailable"}), 503
+        result = run_watchlist_mutation(lambda: services.watchlists.rename_ignore_list(data["old_name"], data["new_name"]))
+        return result if isinstance(result, tuple) else jsonify({"ok": True})
+
+    @app.post("/api/ignorelists/rules/<signature_id>/enabled")
+    @login_required
+    def api_set_ignore_rule_enabled(signature_id):
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or set(data) != {"enabled"} or not isinstance(data["enabled"], bool):
+            return jsonify({"error": "enabled must be a boolean"}), 400
+        if services.watchlists is None: return jsonify({"error": "ignore lists are unavailable"}), 503
+        result = run_watchlist_mutation(lambda: services.watchlists.set_ignore_rule_enabled(signature_id, data["enabled"]))
+        return result if isinstance(result, tuple) else jsonify({"ok": True})
+
+    @app.delete("/api/ignorelists/rules/<signature_id>")
+    @login_required
+    def api_delete_ignore_rule(signature_id):
+        if services.watchlists is None: return jsonify({"error": "ignore lists are unavailable"}), 503
+        result = run_watchlist_mutation(lambda: services.watchlists.delete_ignore_rule(signature_id))
+        return result if isinstance(result, tuple) else jsonify({"ok": True})
+
+    @app.post("/api/ignorelists/delete")
+    @login_required
+    def api_delete_ignorelist():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or set(data) != {"name"} or not isinstance(data["name"], str):
+            return jsonify({"error": "name is required"}), 400
+        if services.watchlists is None: return jsonify({"error": "ignore lists are unavailable"}), 503
+        result = run_watchlist_mutation(lambda: services.watchlists.delete_ignore_list(data["name"]))
         return result if isinstance(result, tuple) else jsonify({"ok": True})
 
     @app.get("/api/errors")

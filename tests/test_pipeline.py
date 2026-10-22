@@ -5,6 +5,7 @@ from bt_signature_detector.models import Advertisement, Confidence, Signature
 from bt_signature_detector.builtin_rules import BuiltInRule, BuiltinScoringSettings
 from bt_signature_detector.detection_scoring import CrossProtocolScorer
 from bt_signature_detector.pipeline import DetectionPipeline, match_ble_rules
+from bt_signature_detector.wifi_scanner import WifiObservation
 import tempfile
 from pathlib import Path
 
@@ -72,6 +73,29 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(pipeline.store_errors, 1)
         self.assertEqual(pipeline.advertisements_processed, 3)
+
+    def test_matching_ignore_rule_hides_ble_before_live_cache_and_detection(self):
+        ignored = Signature("ignored", "Noise", Confidence.UNKNOWN, name_pattern="^Axon-", name_mode="regex", ignorelist="Quiet")
+        watched = Signature("watched", "Watch", Confidence.POSSIBLE, name_pattern="^Axon-", name_mode="regex", watchlist="Watch")
+        class Cache:
+            def __init__(self): self.items = []
+            def add(self, item): self.items.append(item)
+        class Store:
+            def __init__(self): self.events = []
+            def record(self, event): self.events.append(event)
+        cache, store = Cache(), Store()
+        pipeline = DetectionPipeline((ignored, watched), store=store, scan_cache=cache, device_cache=cache, cooldown_seconds=0)
+        events = pipeline.process(Advertisement("AA:BB:CC:00:00:01", name="Axon-1234", rssi=-45))
+        self.assertEqual(events, [])
+        self.assertEqual(cache.items, [])
+        self.assertEqual(store.events, [])
+
+    def test_matching_ignore_rule_hides_wifi_before_detection(self):
+        ignored = Signature("ignored-wifi", "Lab network", Confidence.UNKNOWN, protocol="wifi",
+            ssid_pattern="^Lab-", ssid_mode="regex", ignorelist="Quiet Wi-Fi")
+        pipeline = DetectionPipeline((ignored,), cooldown_seconds=0)
+        observation = WifiObservation("Lab-Camera", "00:11:22:33:44:55", -45, 6, "WPA", datetime.now(timezone.utc))
+        self.assertEqual(pipeline.process_wifi_observation(observation), [])
 
 
 if __name__ == "__main__": unittest.main()
