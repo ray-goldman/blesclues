@@ -6,7 +6,7 @@ Requires=bluetooth.service
 [Service]
 Type=oneshot
 ExecStart=/usr/sbin/rfkill unblock bluetooth
-ExecStart=/usr/bin/bluetoothctl power on
+ExecStart=/bin/sh -c '/usr/bin/bluetoothctl show | /usr/bin/grep -q "Powered: yes" || /usr/bin/bluetoothctl power on'
 RemainAfterExit=yes
 
 [Install]
