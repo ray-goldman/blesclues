@@ -210,8 +210,7 @@ h2 { margin: 0; font-size: 15px; line-height: 1.25; letter-spacing: -.02em; font
 .device-controls { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 20px; border-top: 2px solid var(--blue); }
 .device-controls h2 { margin-bottom: 7px; }
 .device-controls .section-note { max-width: 620px; min-height: 0; margin: 0; }
-.browser-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; }
-.browser-actions button:disabled { opacity: .48; cursor: not-allowed; }
+.device-update-actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; }
 .device-status-rail { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 14px; }
 .device-surface { margin-top: 14px; border-top: 2px solid var(--blue); }
 .wifi-device-surface { border-top-color: #388b88; }
@@ -321,7 +320,7 @@ main > .error-message:empty { display: none; }
   .monitor-grid { grid-template-columns: 1fr; gap: 13px; }
   .settings-section, .account-form { grid-template-columns: 1fr; gap: 13px; }
   .device-controls { align-items: start; flex-direction: column; }
-  .browser-actions { justify-content: start; }
+  .device-update-actions { justify-content: start; }
   .watchlist-layout { grid-template-columns: 1fr; }
   .watchlist-sidebar { padding-bottom: 0; }
   .watchlist-sidebar nav { display: flex; overflow-x: auto; }
