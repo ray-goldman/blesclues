@@ -80,10 +80,9 @@ install -d -m 0755 /etc/systemd/system/bluetooth.service.d
 install -m 0644 "$ROOT_DIR/systemd/bluetooth.service.d/10-bt-signature-detector.conf" /etc/systemd/system/bluetooth.service.d/10-bt-signature-detector.conf
 install -m 0755 "$ROOT_DIR/scripts/apply_update_helper.sh" /usr/local/sbin/bt-detector-apply-update
 install -m 0755 "$ROOT_DIR/scripts/restart_detector_helper.sh" /usr/local/sbin/bt-detector-restart-scanner
-install -m 0755 "$ROOT_DIR/scripts/device_browser_helper.sh" /usr/local/sbin/bt-detector-device-browser
 install -m 0755 "$ROOT_DIR/scripts/wifi_mode_helper.sh" /usr/local/sbin/bt-detector-wifi-mode
-install -m 0440 "$ROOT_DIR/systemd/bt-signature-detector-device-browser.sudoers" /etc/sudoers.d/bt-signature-detector-device-browser
-visudo -cf /etc/sudoers.d/bt-signature-detector-device-browser >/dev/null
+# Remove the obsolete device-browser radio control installed by older releases.
+rm -f /etc/sudoers.d/bt-signature-detector-device-browser /usr/local/sbin/bt-detector-device-browser
 install -m 0440 "$ROOT_DIR/systemd/bt-signature-detector-wifi-mode.sudoers" /etc/sudoers.d/bt-signature-detector-wifi-mode
 visudo -cf /etc/sudoers.d/bt-signature-detector-wifi-mode >/dev/null
 # Replace the legacy broadcast network with a hidden, disabled-by-default profile.

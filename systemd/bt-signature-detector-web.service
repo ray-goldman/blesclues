@@ -18,11 +18,11 @@ NoNewPrivileges=false
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-RuntimeDirectory=bt-signature-detector bt-signature-detector-web
+RuntimeDirectory=bt-signature-detector
 RuntimeDirectoryMode=0770
 RuntimeDirectoryPreserve=yes
 ReadOnlyPaths=/run/bt-signature-detector
-ReadWritePaths=/var/lib/bt-signature-detector /etc/bt-signature-detector /run/bt-signature-detector-web
+ReadWritePaths=/var/lib/bt-signature-detector /etc/bt-signature-detector
 StandardOutput=journal
 StandardError=journal
 

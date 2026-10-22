@@ -14,7 +14,6 @@ from functools import wraps
 from typing import Callable
 import tempfile
 import subprocess
-import re
 import threading
 import time
 import yaml
@@ -38,8 +37,6 @@ class WebServices:
     devices: Callable[[], list] = lambda: []
     wifi_status: Callable[[], dict] = lambda: {"mode": "idle", "scan_active": False, "admin_ap_active": False}
     wifi_observations: Callable[[], list] = lambda: []
-    browser_mode: Callable[[], bool] | None = None
-    set_browser_mode: Callable[[bool], bool] | None = None
     errors: Callable[[], list] = lambda: []
     max_live_scans: int = 100
     config_file: Path | None = None
@@ -116,31 +113,6 @@ def _ensure_dashboard_certificate(cert_file: Path, key_file: Path, hosts: list[s
     os.chmod(cert_tmp, 0o644)
     os.replace(key_tmp, key_file)
     os.replace(cert_tmp, cert_file)
-
-
-def _device_scan_error(exc: Exception) -> str:
-    if isinstance(exc, subprocess.TimeoutExpired):
-        return "Device scan helper timed out. Check whether the Bluetooth adapter is busy, then try again."
-    if isinstance(exc, PermissionError):
-        return "Device scan helper was denied permission to run. Check its sudo rule and installation."
-    if isinstance(exc, FileNotFoundError):
-        return "Device scan helper is not installed. Run the project installer to restore it."
-    if isinstance(exc, subprocess.CalledProcessError):
-        raw = exc.stderr or exc.output or ""
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8", "replace")
-        # Remove terminal control/escape bytes before returning process output to the page.
-        raw = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", str(raw))
-        detail = "".join(char for char in raw if char.isprintable() or char in "\t\n")
-        detail = re.sub(r"(?i)(password|passphrase|psk|token|secret)(\s*[:=]\s*)[^\s,;]+", r"\1\2[redacted]", detail)
-        detail = " ".join(detail.split())[:500]
-        message = f"Device scan helper exited with status {exc.returncode}"
-        return f"{message}: {detail}" if detail else message
-    if isinstance(exc, subprocess.SubprocessError):
-        return "Device scan helper could not complete the requested action. Check system service status."
-    if isinstance(exc, OSError):
-        return f"Device scan helper could not run: {str(exc)}"[:500]
-    return "Device scan helper failed. Check system service status."
 
 
 def _jsonable(item):
@@ -319,12 +291,10 @@ def create_app(services: WebServices) -> Flask:
 
     def current_scan_status():
         status = dict(services.status())
-        active = services.browser_mode() if services.browser_mode is not None else bool(status.get("browser_active"))
         configured = status.get("configured_scan_mode", status.get("scan_mode", "unknown"))
-        status["browser_active"] = active
         status["configured_scan_mode"] = configured
-        status["effective_scan_mode"] = "active" if active else configured
-        status["scan_mode"] = status["effective_scan_mode"]
+        status["effective_scan_mode"] = configured
+        status["scan_mode"] = configured
         return status
 
     @app.get("/api/status")
@@ -357,6 +327,25 @@ def create_app(services: WebServices) -> Flask:
     def api_wifi_observations():
         try:
             observations = services.wifi_observations()[-services.max_live_scans:]
+            if services.watchlists is not None:
+                from datetime import datetime
+                from .signatures import match_wifi_signature
+                from .wifi_scanner import WifiObservation
+                ignored = [signature for signature in services.watchlists.list_signatures()
+                           if signature.enabled and signature.ignorelist and signature.protocol == "wifi"]
+                def is_ignored(item):
+                    if not isinstance(item, dict):
+                        return False
+                    try:
+                        stamp = item.get("observed_at")
+                        if isinstance(stamp, str):
+                            stamp = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                        observation = WifiObservation(str(item.get("ssid") or ""), str(item["bssid"]),
+                            item.get("signal"), item.get("channel"), item.get("security"), stamp)
+                        return any(match_wifi_signature(signature, observation) for signature in ignored)
+                    except (KeyError, TypeError, ValueError):
+                        return False
+                observations = [item for item in observations if not is_ignored(item)]
             return jsonify({"observations": [_jsonable(item) for item in observations]})
         except (OSError, RuntimeError, ValueError) as exc:
             return jsonify({"error": str(exc)}), 503
@@ -376,24 +365,6 @@ def create_app(services: WebServices) -> Flask:
                  "false_positives": list(rule.false_positives)} for rule in rules]})
         except (OSError, ValueError) as exc:
             return jsonify({"error": str(exc)}), 500
-
-    def change_browser_mode(active: bool):
-        if services.set_browser_mode is None:
-            return jsonify({"error": "temporary device browsing is unavailable"}), 503
-        try:
-            services.set_browser_mode(active)
-            status = current_scan_status()
-            return jsonify({"ok": status["browser_active"] == active, **status})
-        except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
-            return jsonify({"error": _device_scan_error(exc)}), 503
-
-    @app.post("/api/devices/start")
-    @login_required
-    def api_devices_start(): return change_browser_mode(True)
-
-    @app.post("/api/devices/stop")
-    @login_required
-    def api_devices_stop(): return change_browser_mode(False)
 
     @app.get("/api/events")
     @login_required
@@ -460,7 +431,8 @@ def create_app(services: WebServices) -> Flask:
         coverage = watch_rule_filter_coverage(signature).status
         return {"id": signature.signature_id, "label": signature.name, "enabled": signature.enabled,
                 "protocol": signature.protocol,
-                "watchlist_name": signature.watchlist, "match_mode": signature.match_mode, "criteria": criteria, "filter_coverage": coverage,
+                "watchlist_name": signature.watchlist, "ignorelist_name": signature.ignorelist,
+                "match_mode": signature.match_mode, "criteria": criteria, "filter_coverage": coverage,
                 "manufacturer_names": {**manufacturer_names(criteria.get("manufacturer_data")),
                     **manufacturer_names(criteria.get("manufacturer_ids"))},
                 "confidence": signature.confidence.value, "min_observations": signature.min_observations,
@@ -489,6 +461,21 @@ def create_app(services: WebServices) -> Flask:
             lists = [{"name": name, "rules": sorted(rules, key=lambda rule: rule["label"].casefold())}
                      for name, rules in sorted(grouped.items(), key=lambda item: item[0].casefold())]
             return jsonify({"watchlists": lists})
+        except (OSError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 500
+
+    @app.get("/api/ignorelists")
+    @login_required
+    def api_ignorelists():
+        if services.watchlists is None: return jsonify({"error": "ignore lists are unavailable"}), 503
+        try:
+            grouped = {}
+            for signature in services.watchlists.list_signatures():
+                if signature.ignorelist is not None:
+                    grouped.setdefault(signature.ignorelist, []).append(watch_rule_data(signature))
+            lists = [{"name": name, "rules": sorted(rules, key=lambda rule: rule["label"].casefold())}
+                     for name, rules in sorted(grouped.items(), key=lambda item: item[0].casefold())]
+            return jsonify({"ignorelists": lists})
         except (OSError, ValueError) as exc:
             return jsonify({"error": str(exc)}), 500
 
@@ -538,6 +525,54 @@ def create_app(services: WebServices) -> Flask:
             return jsonify({"error": "name is required"}), 400
         if services.watchlists is None: return jsonify({"error": "watch lists are unavailable"}), 503
         result = run_watchlist_mutation(lambda: services.watchlists.delete_list(data["name"]))
+        return result if isinstance(result, tuple) else jsonify({"ok": True})
+
+    @app.post("/api/ignorelists/rules")
+    @login_required
+    def api_create_ignore_rule():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict): return jsonify({"error": "a JSON object is required"}), 400
+        if services.watchlists is None: return jsonify({"error": "ignore lists are unavailable"}), 503
+        result = run_watchlist_mutation(lambda: services.watchlists.create_ignore_rule(data))
+        if isinstance(result, tuple): return result
+        return jsonify({"rule": watch_rule_data(result)}), 201
+
+    @app.post("/api/ignorelists/rename")
+    @login_required
+    def api_rename_ignorelist():
+        data = request.get_json(silent=True)
+        if (not isinstance(data, dict) or set(data) != {"old_name", "new_name"}
+                or not isinstance(data["old_name"], str) or not isinstance(data["new_name"], str)):
+            return jsonify({"error": "old_name and new_name are required"}), 400
+        if services.watchlists is None: return jsonify({"error": "ignore lists are unavailable"}), 503
+        result = run_watchlist_mutation(lambda: services.watchlists.rename_ignore_list(data["old_name"], data["new_name"]))
+        return result if isinstance(result, tuple) else jsonify({"ok": True})
+
+    @app.post("/api/ignorelists/rules/<signature_id>/enabled")
+    @login_required
+    def api_set_ignore_rule_enabled(signature_id):
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or set(data) != {"enabled"} or not isinstance(data["enabled"], bool):
+            return jsonify({"error": "enabled must be a boolean"}), 400
+        if services.watchlists is None: return jsonify({"error": "ignore lists are unavailable"}), 503
+        result = run_watchlist_mutation(lambda: services.watchlists.set_ignore_rule_enabled(signature_id, data["enabled"]))
+        return result if isinstance(result, tuple) else jsonify({"ok": True})
+
+    @app.delete("/api/ignorelists/rules/<signature_id>")
+    @login_required
+    def api_delete_ignore_rule(signature_id):
+        if services.watchlists is None: return jsonify({"error": "ignore lists are unavailable"}), 503
+        result = run_watchlist_mutation(lambda: services.watchlists.delete_ignore_rule(signature_id))
+        return result if isinstance(result, tuple) else jsonify({"ok": True})
+
+    @app.post("/api/ignorelists/delete")
+    @login_required
+    def api_delete_ignorelist():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict) or set(data) != {"name"} or not isinstance(data["name"], str):
+            return jsonify({"error": "name is required"}), 400
+        if services.watchlists is None: return jsonify({"error": "ignore lists are unavailable"}), 503
+        result = run_watchlist_mutation(lambda: services.watchlists.delete_ignore_list(data["name"]))
         return result if isinstance(result, tuple) else jsonify({"ok": True})
 
     @app.get("/api/errors")
@@ -781,15 +816,6 @@ def main():
         signatures_path = args.config.resolve().parent / signatures_path
     store = EventStore(config.storage.path, retention_days=config.storage.retention_days, max_events=config.storage.max_events)
     runtime_dir = Path("/run/bt-signature-detector")
-    browser_state_file = Path("/run/bt-signature-detector-web/device-browser.json")
-
-    def browser_mode():
-        try:
-            value = json.loads(browser_state_file.read_text(encoding="utf-8"))
-            return isinstance(value, dict) and value.get("mode") == "active"
-        except (OSError, json.JSONDecodeError):
-            return False
-
     def scanner_status():
         result = subprocess.run(["systemctl", "is-active", "bt-signature-detector.service"], capture_output=True, text=True)
         current = load_app_config(args.config)
@@ -797,17 +823,15 @@ def main():
             runtime_status = json.loads((runtime_dir / "scanner-status.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             runtime_status = {}
-        active = browser_mode()
         configured_mode = current.bluetooth.scan_mode
         wifi_mode = "scan" if current.wifi_scanning.enabled else "admin_ap" if current.access_point.enabled else "idle"
         wifi_service_active = subprocess.run(["systemctl", "is-active", "bt-signature-detector-wifi.service"], capture_output=True, text=True).stdout.strip() == "active"
         return {"scanner": result.stdout.strip() or "unknown",
                 "scanner_state": runtime_status.get("state", "unknown"),
                 "scanner_error": runtime_status.get("error"),
-                "scan_mode": "active" if active else configured_mode,
+                "scan_mode": configured_mode,
                 "configured_scan_mode": configured_mode,
-                "effective_scan_mode": "active" if active else configured_mode,
-                "browser_active": active,
+                "effective_scan_mode": configured_mode,
                 "access_point": AccessPointClient().read().active,
                 "wifi_mode": wifi_mode,
                 "wifi_scanning_enabled": current.wifi_scanning.enabled,
@@ -832,10 +856,6 @@ def main():
     def restart_scanner():
         subprocess.run(["sudo", "-n", "/usr/local/sbin/bt-detector-restart-scanner"],
             check=True, capture_output=True, timeout=30)
-    def set_browser_mode(active):
-        action = "start" if active else "stop"
-        subprocess.run(["sudo", "-n", "/usr/local/sbin/bt-detector-device-browser", action],
-            check=True, capture_output=True, text=True, timeout=40)
     initial_wifi_mode = "scan" if config.wifi_scanning.enabled else "admin_ap" if config.access_point.enabled else "idle"
     def wifi_mode_action(action):
         subprocess.run(["sudo", "-n", "/usr/local/sbin/bt-detector-wifi-mode", action],
@@ -851,7 +871,6 @@ def main():
         max_live_scans=config.web.max_live_scans,
         config_file=args.config, ap_update=update_ap,
         set_wifi_mode=lambda mode: wifi_mode_controller.set_mode(mode),
-        browser_mode=browser_mode, set_browser_mode=set_browser_mode,
         update_manager=WebUpdateManager(manifest_url=config.updates.manifest_url,
             public_key_file=config.updates.public_key_file,
             staging_dir=Path("/var/lib/bt-signature-detector/web/updates"),

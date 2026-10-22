@@ -148,6 +148,32 @@ signatures:
     service_uuids: ["180f"]
 '''))
 
+    def test_ignorelist_uses_the_same_matching_criteria_and_is_separate_from_watchlists(self):
+        signatures = load_signatures(self.write_signatures('''schema_version: 1
+signatures:
+  - id: hidden-beacon
+    label: Quiet beacon
+    ignorelist: Quiet devices
+    name_regex: '^Axon-[0-9]{4}$'
+    identifier_prefixes: ["AA:BB:CC"]
+'''))
+        signature = signatures[0]
+        self.assertEqual(signature.ignorelist, "Quiet devices")
+        self.assertIsNone(signature.watchlist)
+        self.assertTrue(match_signature(signature, Advertisement("aa:bb:cc:01:02:03", name="Axon-1234")))
+        self.assertFalse(match_signature(signature, Advertisement("aa:bb:cd:01:02:03", name="Axon-1234")))
+
+    def test_signature_cannot_be_both_watched_and_ignored(self):
+        with self.assertRaisesRegex(ValueError, "watchlist.*ignorelist|ignorelist.*watchlist"):
+            load_signatures(self.write_signatures('''schema_version: 1
+signatures:
+  - id: ambiguous
+    label: Ambiguous
+    watchlist: Track
+    ignorelist: Hide
+    service_uuids: ["180d"]
+'''))
+
     def test_watchlist_limits_boolean_type_and_unknown_keys_are_rejected(self):
         for body in (
             'watchlist: "' + ("x" * 81) + '"\n    service_uuids: ["180d"]',

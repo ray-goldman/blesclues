@@ -80,6 +80,19 @@ signatures:
                 restart=lambda: (_ for _ in ()).throw(RuntimeError("restart failed")))
         self.assertEqual(self.path.read_bytes(), before)
 
+    def test_ignore_lists_create_rename_toggle_and_delete_without_changing_watch_lists(self):
+        watched = self.store.create_rule({"label": "Track", "list_name": "Home", "service_uuids": ["180f"]})
+        ignored = self.store.create_ignore_rule({"label": "Ignore Axon", "list_name": "Quiet", "name_regex": "^Axon-[0-9]+$", "identifier_prefixes": ["aa:bb:cc"]})
+        self.assertEqual(ignored.ignorelist, "Quiet")
+        self.assertIsNone(ignored.watchlist)
+        self.store.rename_ignore_list("quiet", "Muted")
+        self.store.set_ignore_rule_enabled(ignored.signature_id, False)
+        ignored_after = next(item for item in self.store.list_signatures() if item.signature_id == ignored.signature_id)
+        self.assertEqual(ignored_after.ignorelist, "Muted")
+        self.assertFalse(ignored_after.enabled)
+        self.store.delete_ignore_rule(ignored.signature_id)
+        self.assertEqual([item.signature_id for item in self.store.list_signatures()], ["builtin", watched.signature_id])
+
 
 if __name__ == "__main__":
     unittest.main()

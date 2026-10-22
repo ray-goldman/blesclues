@@ -23,6 +23,11 @@
       <div><p class="kicker">RELEASE MANAGEMENT</p><h1>Signed updates</h1><p class="intro-copy">Check the configured feed or bring a verified build to the Pi.</p></div>
       <span id="connection" class="state-tag waiting"><i></i>Manual check</span>
     </section>
+    <section id="apply-progress" class="apply-progress" role="status" aria-live="polite" hidden>
+      <div class="apply-progress-heading"><strong id="apply-progress-title">Applying update</strong><span id="apply-progress-version"></span></div>
+      <p id="apply-progress-detail">Do not apply again while the Pi is restarting. Keep this page open.</p>
+      <progress id="apply-progress-bar" aria-label="Update in progress"></progress>
+    </section>
     <section class="release-surface">
       <p class="kicker">01 · ONLINE FEED</p>
       <div class="section-heading release-heading"><div><h2>Check for a release</h2><p>Feed checks need internet access. The signature is verified before staging.</p></div><button id="check" class="primary-button" type="button">Check feed</button></div>
@@ -40,7 +45,7 @@
       <p class="kicker">03 · READY TO APPLY</p>
       <h2>Staged builds</h2>
       <div id="staged" class="release-list"><p class="empty-state">No staged builds.</p></div>
-      <p class="quiet-text">Applying restarts the scanner. A failed health check rolls the Pi back to the previous version.</p>
+      <p class="quiet-text">Applying restarts the app and scanner. Keep this page open while the Pi reconnects. A failed health check rolls the Pi back to the previous version.</p>
     </section>
     <p id="message" class="error-message" role="status"></p>
   </main>

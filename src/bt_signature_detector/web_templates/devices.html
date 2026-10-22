@@ -20,27 +20,26 @@
   </header>
   <main class="workspace">
     <section class="page-heading">
-      <div><p class="kicker">LIVE DEVICE BROWSER</p><h1>Nearby BLE devices</h1><p class="intro-copy">Temporarily broaden discovery and inspect devices that are advertising nearby.</p></div>
-      <div class="connection-state"><span id="browser-state" class="state-tag waiting"><i></i>Checking scanner</span><span id="browser-updated" class="mono quiet-text">Waiting for first update</span></div>
+      <div><p class="kicker">LIVE DEVICE INVENTORY</p><h1>Nearby BLE devices</h1><p class="intro-copy">View devices seen by the configured scanner. Pausing this page does not pause either radio.</p></div>
+      <div class="connection-state"><span id="scanner-state" class="state-tag waiting"><i></i>Checking scanner</span><span id="devices-updated" class="mono quiet-text">Waiting for first update</span></div>
     </section>
 
     <section class="device-controls surface">
       <div>
-        <p class="kicker">SCAN MODE</p>
-        <h2 id="browser-mode">—</h2>
-        <p id="browser-explanation" class="section-note">Active scan requests are used only while browser mode is running. BLE's Clues does not connect to or pair with devices.</p>
+        <p class="kicker">CONFIGURED SCAN</p>
+        <h2 id="configured-mode">—</h2>
+        <p id="browser-explanation" class="section-note">The scanner runs continuously with the configured passive advertisement filters. Page controls only pause or resume updates shown here.</p>
       </div>
-      <div class="browser-actions">
-        <button id="start-browser" class="primary-button" type="button">Start device scan</button>
-        <button id="pause-browser" class="outline-button" type="button" disabled>Pause</button>
-        <button id="stop-browser" class="outline-button" type="button" disabled>Stop and restore filters</button>
+      <div class="device-update-actions">
+        <button id="pause-updates" class="outline-button" type="button">Pause updates</button>
+        <button id="resume-updates" class="primary-button" type="button" hidden>Resume updates</button>
       </div>
     </section>
 
     <section class="device-status-rail status-rail" aria-label="Scanner status">
       <div class="status-cell"><span class="status-label">SCANNER SERVICE</span><strong id="scanner-service">—</strong></div>
       <div class="status-cell"><span class="status-label">BLE SCANNER</span><strong id="scanner-health">—</strong></div>
-      <div class="status-cell"><span class="status-label">SAVED MODE</span><strong id="saved-mode">—</strong></div>
+      <div class="status-cell"><span class="status-label">CONFIGURED MODE</span><strong id="saved-mode">—</strong></div>
       <div class="status-cell"><span class="status-label">DEVICES IN VIEW</span><strong id="device-count">0</strong></div>
     </section>
     <p id="scanner-error" class="error-message" role="status"></p>
@@ -54,7 +53,7 @@
       <div class="device-table-wrap">
         <table class="device-table">
           <thead><tr><th>Device</th><th>Observed address</th><th>Signal</th><th>First seen</th><th>Last seen</th><th>Manufacturer data</th><th>Service UUIDs</th><th>Service data</th><th></th></tr></thead>
-          <tbody id="device-rows"><tr><td colspan="9" class="empty-state">Start a device scan to see live advertisers.</td></tr></tbody>
+          <tbody id="device-rows"><tr><td colspan="9" class="empty-state">Waiting for devices seen by the configured scanner.</td></tr></tbody>
         </table>
       </div>
     </section>
@@ -67,14 +66,14 @@
       <div id="wifi-device-cards" class="wifi-device-grid"><p class="empty-state">Checking Wi-Fi scan mode…</p></div>
     </section>
     <p id="devices-error" class="error-message" role="status"></p>
-    <div id="device-action-error" class="action-error" role="alert" hidden><p id="device-action-error-text"></p><button id="dismiss-device-error" class="outline-button" type="button">Dismiss</button></div>
   </main>
   <dialog id="watch-dialog" class="watch-dialog">
     <form id="watch-rule-form">
       <div class="section-heading dialog-heading"><div><p class="kicker">SAVE OBSERVATION</p><h2 id="watch-dialog-title">Watch this device</h2></div><button id="close-watch" class="quiet-button" type="button">Close</button></div>
       <p id="watch-address-note" class="address-warning"></p>
       <label class="field">Rule name<input name="label" maxlength="120" required></label>
-      <label class="field">Watch list<input name="list_name" maxlength="80" list="watch-list-options" required placeholder="Choose or name a list"><datalist id="watch-list-options"></datalist></label>
+      <label class="field">Save as<select name="rule_target"><option value="watch">Watch · flag future matches</option><option value="ignore">Ignore · hide from live view</option></select></label>
+      <label class="field"><span id="rule-list-label">Watch list</span><input name="list_name" maxlength="80" list="watch-list-options" required placeholder="Choose or name a list"><datalist id="watch-list-options"></datalist></label>
       <label class="field">How should criteria combine?<select name="match_mode"><option value="all">All selected criteria</option><option value="any">Any selected criterion</option></select></label>
       <fieldset class="watch-criteria"><legend>Use these observed characteristics</legend><div id="watch-criteria-options"></div></fieldset>
       <p class="field-note">Rules need at least three matching observations and start with notifications off. Wi-Fi rules are saved even when Wi-Fi scanning is disabled.</p>

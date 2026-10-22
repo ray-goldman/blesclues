@@ -65,8 +65,18 @@ class WatchPageTests(unittest.TestCase):
         asset = asset_response.data
         asset_response.close()
         self.assertIn(b"No watch lists yet", page.data)
-        for text in (b"Browser scan only", b"Partial", b"Disabled", b"X-CSRF-Token"):
+        for text in (b"No derived filter", b"Partial", b"Disabled", b"X-CSRF-Token"):
             self.assertIn(text, asset)
+        self.assertIn(b"Ignore lists", page.data)
+        self.assertIn(b"/api/ignorelists", asset)
+
+    def test_device_rule_dialog_can_save_to_watch_or_ignore_lists(self):
+        self.client.post("/setup", data={"password": "a-good-password"})
+        page = self.client.get("/devices")
+        self.assertIn(b"Watch \xc2\xb7 flag future matches", page.data)
+        self.assertIn(b"Ignore \xc2\xb7 hide from live view", page.data)
+        asset = self.client.get("/static/devices.js")
+        self.assertIn(b"/api/ignorelists/rules", asset.data)
 
 
 if __name__ == "__main__":

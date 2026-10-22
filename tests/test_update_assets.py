@@ -7,6 +7,33 @@ from bt_signature_detector.update_assets import SystemdAssetInstaller
 
 
 class SystemdAssetInstallerTests(unittest.TestCase):
+    def test_removes_legacy_device_browser_assets_and_restores_them_on_rollback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "share"
+            systemd = root / "etc" / "systemd" / "system"
+            sbin = root / "usr" / "local" / "sbin"
+            for relative in SystemdAssetInstaller.ASSETS:
+                path = source / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("new: " + relative, encoding="utf-8")
+            legacy_sudoers = root / "etc" / "sudoers.d" / "bt-signature-detector-device-browser"
+            legacy_helper = sbin / "bt-detector-device-browser"
+            legacy_sudoers.parent.mkdir(parents=True)
+            legacy_sudoers.write_text("old sudo rule", encoding="utf-8")
+            legacy_helper.parent.mkdir(parents=True)
+            legacy_helper.write_text("old helper", encoding="utf-8")
+
+            installer = SystemdAssetInstaller(source, systemd_dir=systemd, sbin_dir=sbin,
+                                               runner=lambda *args, **kwargs: None)
+            snapshot = installer.install()
+            self.assertFalse(legacy_sudoers.exists())
+            self.assertFalse(legacy_helper.exists())
+
+            snapshot.rollback()
+            self.assertEqual(legacy_sudoers.read_text(), "old sudo rule")
+            self.assertEqual(legacy_helper.read_text(), "old helper")
+
     def test_installs_fixed_allowlisted_units_helpers_and_sudoers(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

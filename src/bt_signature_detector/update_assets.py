@@ -55,19 +55,21 @@ class SystemdAssetInstaller:
         "systemd/bt-signature-detector-updater@.service",
         "systemd/bluetooth.service.d/10-bt-signature-detector.conf",
         "systemd/bt-signature-detector-ap-helper.sudoers",
-        "systemd/bt-signature-detector-device-browser.sudoers",
         "systemd/bt-signature-detector-wifi-mode.sudoers",
         "scripts/apply_update_helper.sh",
         "scripts/restart_detector_helper.sh",
-        "scripts/device_browser_helper.sh",
         "scripts/wifi_mode_helper.sh",
+    )
+    REMOVED_ASSETS = (
+        "systemd/bt-signature-detector-device-browser.sudoers",
+        "scripts/device_browser_helper.sh",
     )
     SCRIPT_NAMES = {
         "scripts/apply_update_helper.sh": "bt-detector-apply-update",
         "scripts/restart_detector_helper.sh": "bt-detector-restart-scanner",
-        "scripts/device_browser_helper.sh": "bt-detector-device-browser",
         "scripts/wifi_mode_helper.sh": "bt-detector-wifi-mode",
     }
+    REMOVED_SCRIPT_NAMES = {"scripts/device_browser_helper.sh": "bt-detector-device-browser"}
 
     def __init__(self, source_root: Path, *, systemd_dir: Path = Path("/etc/systemd/system"),
                  sbin_dir: Path = Path("/usr/local/sbin"), runner: Callable = subprocess.run) -> None:
@@ -78,8 +80,9 @@ class SystemdAssetInstaller:
 
     def _target(self, relative: str) -> tuple[Path, int]:
         source = Path(relative)
-        if relative in self.SCRIPT_NAMES:
-            return self.sbin_dir / self.SCRIPT_NAMES[relative], 0o755
+        script_name = self.SCRIPT_NAMES.get(relative, self.REMOVED_SCRIPT_NAMES.get(relative))
+        if script_name:
+            return self.sbin_dir / script_name, 0o755
         if source.suffix == ".sudoers":
             return self.systemd_dir.parent.parent / "sudoers.d" / source.name.removesuffix(".sudoers"), 0o440
         if relative.startswith("systemd/bluetooth.service.d/"):
@@ -115,6 +118,16 @@ class SystemdAssetInstaller:
                 old_mode = target.stat().st_mode & 0o777 if old_content is not None else None
                 snapshot.states.append((target, old_content, old_mode))
                 _atomic_write(target, content, mode)
+            for relative in self.REMOVED_ASSETS:
+                target, _mode = self._target(relative)
+                if target.is_symlink():
+                    raise ValueError(f"refusing to remove symlink legacy asset: {target}")
+                if not target.exists():
+                    continue
+                if not target.is_file():
+                    raise ValueError(f"refusing to remove non-file legacy asset: {target}")
+                snapshot.states.append((target, target.read_bytes(), target.stat().st_mode & 0o777))
+                target.unlink()
             return snapshot
         except Exception:
             snapshot.rollback()

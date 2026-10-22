@@ -124,9 +124,7 @@ def main(argv=None):
                 if args.dry_run:
                     await run_synthetic(pipeline.process, stop)
                 else:
-                    override_file = Path("/run/bt-signature-detector-web/device-browser.json")
-                    bluetooth_config = effective_bluetooth_config(config.bluetooth, override_file=override_file,
-                                                                   signatures=signatures)
+                    bluetooth_config = effective_bluetooth_config(config.bluetooth, signatures=signatures)
                     def publish_scanner_status(status):
                         if not has_runtime_dir:
                             return

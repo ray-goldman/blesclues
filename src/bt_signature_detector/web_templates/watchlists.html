@@ -11,15 +11,16 @@
   <header class="topbar">
     <a class="brand" href="/" aria-label="BLE's Clues monitor"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span class="brand-name">BLE's Clues <small>FIELD CONSOLE</small></span></a>
     <nav class="navigation" aria-label="Main navigation">
-      <a href="/">Monitor</a><a href="/live">Live Feed</a><a href="/devices">Devices</a><a href="/watchlists" aria-current="page">Watch Lists</a><a href="/settings">Settings</a><a href="/updates">Updates</a>
+      <a href="/">Monitor</a><a href="/live">Live Feed</a><a href="/devices">Devices</a><a href="/watchlists" aria-current="page">Lists</a><a href="/settings">Settings</a><a href="/updates">Updates</a>
     </nav>
     <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="quiet-button" type="submit">Sign out</button></form>
   </header>
   <main class="workspace">
-    <section class="page-heading"><div><p class="kicker">SAVED MATCH RULES</p><h1>Watch Lists</h1><p class="intro-copy">Rules are checked against advertisements received by the configured passive scan.</p></div><a class="outline-button watch-browser-link" href="/devices">Find a device</a></section>
-    <p class="watchlist-note">Passive coverage describes which rules can help BlueZ receive matching advertisements. Browser scan only rules remain available during the temporary Device Browser scan.</p>
+    <section class="page-heading"><div><p class="kicker">SAVED MATCH RULES</p><h1>Lists</h1><p class="intro-copy">Choose what to flag and what to keep out of the live view.</p></div><a class="outline-button watch-browser-link" href="/devices">Find a device</a></section>
+    <div class="list-type-tabs" role="tablist" aria-label="Rule list type"><button type="button" class="selected" data-list-type="watch" role="tab" aria-selected="true">Watch lists</button><button type="button" data-list-type="ignore" role="tab" aria-selected="false">Ignore lists</button></div>
+    <p class="watchlist-note">Passive coverage describes which rules can help BlueZ receive matching advertisements. Rules without a derived filter can still match when their advertisements pass a configured BlueZ filter.</p>
     <p id="watchlists-error" class="error-message" role="status"></p>
-    <section id="watchlists-empty" class="surface watch-empty" hidden><p class="kicker">NO SAVED RULES</p><h2>No watch lists yet</h2><p>Start a temporary scan in Devices, then save an observation as a rule.</p><a class="primary-button" href="/devices">Open Devices</a></section>
+    <section id="watchlists-empty" class="surface watch-empty" hidden><p class="kicker">NO SAVED RULES</p><h2 id="list-empty-title">No watch lists yet</h2><p id="list-empty-copy">Open Devices and save an observation as a rule.</p><a class="primary-button" href="/devices">Open Devices</a></section>
     <section id="watchlists-layout" class="watchlist-layout" hidden>
       <aside class="watchlist-sidebar surface"><p class="kicker">LISTS</p><nav id="watchlist-menu" aria-label="Saved watch lists"></nav></aside>
       <section class="watchlist-main surface">

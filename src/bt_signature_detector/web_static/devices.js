@@ -4,6 +4,8 @@ let currentWifiDevices = [];
 let watchOptions = [];
 let watchProtocol = 'ble';
 let pausedInventory = false;
+let devicePollTimer = null;
+let wifiPollTimer = null;
 
 function text(id, value) {
   const element = document.getElementById(id);
@@ -26,13 +28,6 @@ function renderWifiDevices(observations, status) {
   const state = document.getElementById('wifi-device-state');
   const note = document.getElementById('wifi-device-note');
   if (!target || !state || !note) return;
-
-  if (pausedInventory) {
-    state.className = 'state-tag waiting';
-    state.innerHTML = '<i></i>Paused';
-    note.textContent = 'Showing the Wi-Fi networks seen before the scan was paused. Resume the device scan to refresh results.';
-    return;
-  }
 
   if (status.scan_active) {
     state.className = 'state-tag ready';
@@ -80,8 +75,10 @@ async function loadWifiDevices() {
     if (statusResponse.status === 401 || observationsResponse.status === 401) { location.href = '/login'; return; }
     if (!statusResponse.ok || !observationsResponse.ok) throw Error('Could not read Wi-Fi scan results.');
     const [status, result] = await Promise.all([statusResponse.json(), observationsResponse.json()]);
+    if (pausedInventory) return;
     renderWifiDevices(result.observations || [], status);
   } catch (error) {
+    if (pausedInventory) return;
     const state = document.getElementById('wifi-device-state');
     const rows = document.getElementById('wifi-device-cards');
     if (state) {
@@ -90,12 +87,6 @@ async function loadWifiDevices() {
     }
     if (rows) rows.innerHTML = `<p class="empty-state">${escapeHtml(error.message)}</p>`;
   }
-}
-
-function setActionError(message) {
-  const panel = document.getElementById('device-action-error');
-  panel.hidden = !message;
-  text('device-action-error-text', message || '');
 }
 
 function companyIdHex(value) {
@@ -185,14 +176,16 @@ function openWatchDialog(device, protocol = 'ble') {
         : '';
     return `<div class="watch-option"><label><input type="checkbox" data-watch-kind="${escapeHtml(item.kind)}" data-watch-index="${index}" ${item.checked === false ? '' : 'checked'}><span>${escapeHtml(item.label)}</span></label>${controls}</div>`;
   }).join('') || '<p class="empty-state">No matching characteristics were observed.</p>';
-  document.getElementById('watch-dialog-title').textContent = protocol === 'wifi' ? 'Watch this network' : 'Watch this device';
+  document.getElementById('watch-dialog-title').textContent = protocol === 'wifi' ? 'Save this network rule' : 'Save this device rule';
   document.getElementById('watch-address-note').textContent = protocol === 'wifi'
     ? 'SSID rules can match network names. BSSID rules use the access point address, which may change.'
     : device.identifier ? `Address ${device.identifier} can rotate. An address rule only matches this exact observed identifier.` : '';
   const form = document.getElementById('watch-rule-form');
   form.elements.label.value = protocol === 'wifi' ? device.ssid || 'Wi-Fi network' : device.name || 'BLE device';
   form.elements.list_name.value = '';
+  form.elements.rule_target.value = 'watch';
   form.elements.match_mode.value = 'all';
+  updateRuleTargetLabel();
   document.getElementById('watch-form-error').textContent = '';
   document.getElementById('watch-dialog').showModal();
   loadExistingWatchLists();
@@ -200,18 +193,28 @@ function openWatchDialog(device, protocol = 'ble') {
 
 async function loadExistingWatchLists() {
   try {
-    const response = await fetch('/api/watchlists', {credentials: 'same-origin'});
+    const target = document.getElementById('watch-rule-form').elements.rule_target.value;
+    const response = await fetch(target === 'ignore' ? '/api/ignorelists' : '/api/watchlists', {credentials: 'same-origin'});
     if (!response.ok) return;
     const result = await response.json();
-    document.getElementById('watch-list-options').innerHTML = (result.watchlists || []).map(item => `<option value="${escapeHtml(item.name)}"></option>`).join('');
+    const lists = target === 'ignore' ? result.ignorelists : result.watchlists;
+    document.getElementById('watch-list-options').innerHTML = (lists || []).map(item => `<option value="${escapeHtml(item.name)}"></option>`).join('');
   } catch (_) { /* Saving a new list remains available if the list lookup is offline. */ }
 }
+
+function updateRuleTargetLabel() {
+  const ignore = document.getElementById('watch-rule-form').elements.rule_target.value === 'ignore';
+  document.getElementById('rule-list-label').textContent = ignore ? 'Ignore list' : 'Watch list';
+  document.getElementById('watch-dialog-title').textContent = ignore ? 'Keep this out of live view' : 'Flag future matches';
+}
+document.getElementById('watch-rule-form').elements.rule_target.addEventListener('change', () => { updateRuleTargetLabel(); loadExistingWatchLists(); });
 
 document.getElementById('close-watch').addEventListener('click', () => document.getElementById('watch-dialog').close());
 document.getElementById('cancel-watch').addEventListener('click', () => document.getElementById('watch-dialog').close());
 document.getElementById('watch-rule-form').addEventListener('submit', async event => {
   event.preventDefault();
   const form = event.currentTarget;
+  const target = form.elements.rule_target.value;
   const body = {label: form.elements.label.value.trim(), list_name: form.elements.list_name.value.trim(), match_mode: form.elements.match_mode.value};
   if (watchProtocol === 'wifi') body.protocol = 'wifi';
   const selected = [...document.querySelectorAll('#watch-criteria-options input:checked')];
@@ -271,12 +274,12 @@ document.getElementById('watch-rule-form').addEventListener('submit', async even
     return;
   }
   try {
-    const response = await fetch('/api/watchlists/rules', {method: 'POST', credentials: 'same-origin',
+    const response = await fetch(target === 'ignore' ? '/api/ignorelists/rules' : '/api/watchlists/rules', {method: 'POST', credentials: 'same-origin',
       headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrf}, body: JSON.stringify(body)});
     const result = await response.json();
     if (!response.ok) throw Error(result.error || 'Could not save this watch rule.');
     document.getElementById('watch-dialog').close();
-    text('devices-error', `Saved “${result.rule.label}” to ${result.rule.watchlist_name || body.list_name}.`);
+    text('devices-error', `Saved “${result.rule.label}” to ${target === 'ignore' ? result.rule.ignorelist_name : result.rule.watchlist_name || body.list_name}.`);
     await loadDevices();
   } catch (error) {
     document.getElementById('watch-form-error').textContent = error.message;
@@ -286,22 +289,17 @@ document.getElementById('watch-rule-form').addEventListener('submit', async even
 function currentWatchOptions() { return watchOptions; }
 
 function showScannerStatus(status) {
-  const active = Boolean(status.browser_active);
-  const state = document.getElementById('browser-state');
+  const state = document.getElementById('scanner-state');
   const health = status.scanner_state || 'unknown';
   const failed = health === 'error' || status.scanner === 'failed';
-  state.className = `state-tag ${failed ? 'error' : active && health === 'scanning' ? 'ready' : 'waiting'}`;
-  state.innerHTML = `<i></i>${failed ? 'Scanner error' : pausedInventory ? 'Scan paused' : active && health === 'scanning' ? 'Broad scan running' : active ? 'Starting broad scan' : 'Filtered scan mode'}`;
-  text('browser-mode', pausedInventory ? 'Paused · resume to continue' : active ? 'Temporary broad scan' : 'Configured scan filters');
+  state.className = `state-tag ${failed ? 'error' : health === 'scanning' ? 'ready' : 'waiting'}`;
+  const label = failed ? 'Scanner error' : health === 'scanning' ? 'Scanning' : 'Starting scanner';
+  state.replaceChildren(document.createElement('i'), document.createTextNode(label));
+  text('configured-mode', `Configured ${status.scan_mode || status.configured_scan_mode || 'unknown'} scan`);
   text('scanner-service', status.scanner || 'unknown');
   text('scanner-health', health);
   text('saved-mode', status.configured_scan_mode || 'unknown');
   text('scanner-error', status.scanner_error || '');
-  const start = document.getElementById('start-browser');
-  start.textContent = pausedInventory ? 'Resume scan' : 'Start device scan';
-  start.disabled = active;
-  document.getElementById('pause-browser').disabled = !active;
-  document.getElementById('stop-browser').disabled = !active && !pausedInventory;
 }
 
 async function loadDevices() {
@@ -313,43 +311,42 @@ async function loadDevices() {
     if (statusResponse.status === 401 || devicesResponse.status === 401) { location.href = '/login'; return; }
     if (!statusResponse.ok || !devicesResponse.ok) throw Error('Could not read device scan status. Try refreshing.');
     const [status, result] = await Promise.all([statusResponse.json(), devicesResponse.json()]);
+    if (pausedInventory) return;
     showScannerStatus(status);
-    if (!pausedInventory) renderDevices(result.devices || []);
-    text('browser-updated', `Updated ${new Date().toLocaleTimeString()}`);
+    renderDevices(result.devices || []);
+    text('devices-updated', `Updated ${new Date().toLocaleTimeString()}`);
   } catch (error) {
+    if (pausedInventory) return;
     text('devices-error', error.message);
   }
 }
 
-async function setBrowserMode(action) {
-  const start = document.getElementById('start-browser');
-  const pause = document.getElementById('pause-browser');
-  const stop = document.getElementById('stop-browser');
-  start.disabled = pause.disabled = stop.disabled = true;
-  const endpoint = action === 'pause' ? 'stop' : action === 'resume' ? 'start' : action;
-  try {
-    const response = await fetch(`/api/devices/${endpoint}`, {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'X-CSRF-Token': csrf }
-    });
-    const result = await response.json();
-    if (!response.ok) throw Error(result.error || 'Could not change scan mode.');
-    pausedInventory = action === 'pause';
-    if (action === 'stop' || action === 'resume') renderDevices([]);
-    showScannerStatus(result);
-    setActionError(result.ok ? '' : 'The scanner did not enter the requested mode. Check its status before continuing.');
-  } catch (error) {
-    setActionError(error.message);
-  } finally {
-    await loadDevices();
-  }
+function pauseUpdates() {
+  pausedInventory = true;
+  if (devicePollTimer !== null) window.clearInterval(devicePollTimer);
+  if (wifiPollTimer !== null) window.clearInterval(wifiPollTimer);
+  devicePollTimer = wifiPollTimer = null;
+  document.getElementById('pause-updates').hidden = true;
+  document.getElementById('resume-updates').hidden = false;
+  const state = document.getElementById('scanner-state');
+  state.className = 'state-tag waiting';
+  state.replaceChildren(document.createElement('i'), document.createTextNode('Updates paused'));
 }
 
-document.getElementById('start-browser').addEventListener('click', () => setBrowserMode(pausedInventory ? 'resume' : 'start'));
-document.getElementById('pause-browser').addEventListener('click', () => setBrowserMode('pause'));
-document.getElementById('stop-browser').addEventListener('click', () => setBrowserMode('stop'));
-document.getElementById('dismiss-device-error').addEventListener('click', () => setActionError(''));
+function resumeUpdates() {
+  if (!pausedInventory) return;
+  pausedInventory = false;
+  document.getElementById('pause-updates').hidden = false;
+  document.getElementById('resume-updates').hidden = true;
+  loadDevices();
+  loadWifiDevices();
+  devicePollTimer = window.setInterval(loadDevices, 2000);
+  wifiPollTimer = window.setInterval(loadWifiDevices, 5000);
+}
+
+document.getElementById('pause-updates').addEventListener('click', pauseUpdates);
+document.getElementById('resume-updates').addEventListener('click', resumeUpdates);
 loadDevices();
-setInterval(loadDevices, 2000);
+devicePollTimer = window.setInterval(loadDevices, 2000);
 loadWifiDevices();
-setInterval(loadWifiDevices, 5000);
+wifiPollTimer = window.setInterval(loadWifiDevices, 5000);

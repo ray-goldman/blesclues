@@ -13,7 +13,7 @@ from .detection_scoring import CrossProtocolScorer
 from .notifications.dispatcher import NotificationDispatcher
 from .pipeline import DetectionPipeline
 from .runtime_cache import RuntimeWifiCache
-from .signatures import load_signatures
+from .signatures import load_signatures, match_wifi_signature
 from .store import EventStore
 from .wifi_scanner import scan_wifi
 
@@ -50,7 +50,11 @@ async def run_wifi_scan_service(config_path: Path, *, scanner: Callable = scan_w
                 # Watch-list rules are editable without restarting the optional Wi-Fi service.
                 pipeline.signatures = load_signatures(signature_path)
                 observations = await asyncio.to_thread(scanner)
-                cache.replace(observations)
+                visible = [observation for observation in observations if not any(
+                    signature.enabled and signature.ignorelist
+                    and match_wifi_signature(signature, observation)
+                    for signature in pipeline.signatures)]
+                cache.replace(visible)
                 for observation in observations:
                     pipeline.process_wifi_observation(observation)
             except (OSError, RuntimeError, ValueError) as exc:

@@ -1,8 +1,5 @@
 import asyncio
-import json
-from dataclasses import replace
 from pathlib import Path
-import tempfile
 import unittest
 from types import SimpleNamespace
 
@@ -27,37 +24,19 @@ class ScannerTests(unittest.IsolatedAsyncioTestCase):
                          manufacturer_pattern=b"\x01", watchlist="List")
         derived = OrPatternConfig(0, 0xFF, b"L\x00\x01")
         manual = OrPatternConfig(0, 0xFF, b"manual")
-        with tempfile.TemporaryDirectory() as temp:
-            effective = effective_bluetooth_config(BluetoothConfig(or_patterns=(manual, derived)),
-                override_file=Path(temp) / "none", signatures=(rule,))
+        effective = effective_bluetooth_config(BluetoothConfig(or_patterns=(manual, derived)),
+            signatures=(rule,))
         self.assertEqual(effective.scan_mode, "passive")
         self.assertEqual(effective.or_patterns, (manual, derived))
 
-    def test_runtime_browser_marker_selects_active_without_blueZ_filters(self):
-        configured = BluetoothConfig(or_patterns=(OrPatternConfig(0, 255, b"\x01\x02"),))
-        with tempfile.TemporaryDirectory() as temp:
-            override = Path(temp) / "device-browser.json"
-            override.write_text(json.dumps({"mode": "active"}))
-
-            effective = effective_bluetooth_config(configured, override_file=override)
-
-        self.assertEqual(effective.scan_mode, "active")
-        self.assertEqual(effective.or_patterns, ())
-        self.assertEqual(configured.scan_mode, "passive")
-        self.assertEqual(len(configured.or_patterns), 1)
-
-    def test_missing_or_malformed_marker_preserves_configured_settings(self):
+    def test_effective_config_always_preserves_the_configured_radio_mode(self):
         configured = BluetoothConfig(or_patterns=(OrPatternConfig(0, 255, b"\x01"),))
-        with tempfile.TemporaryDirectory() as temp:
-            override = Path(temp) / "device-browser.json"
-            self.assertEqual(effective_bluetooth_config(configured, override_file=override), configured)
-            override.write_text("not json")
-            self.assertEqual(effective_bluetooth_config(configured, override_file=override), configured)
+        effective = effective_bluetooth_config(configured)
+        self.assertEqual(effective, configured)
 
     def test_configured_active_mode_is_preserved_without_browser_marker(self):
         configured = BluetoothConfig(scan_mode="active", or_patterns=())
-        with tempfile.TemporaryDirectory() as temp:
-            effective = effective_bluetooth_config(configured, override_file=Path(temp) / "missing.json")
+        effective = effective_bluetooth_config(configured)
         self.assertEqual(effective, configured)
 
     async def test_active_scanner_omits_passive_blueZ_filter(self):
