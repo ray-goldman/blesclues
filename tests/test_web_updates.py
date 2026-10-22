@@ -14,6 +14,25 @@ from bt_signature_detector.web_updates import WebUpdateManager
 
 
 class WebUpdateTests(unittest.TestCase):
+    def test_updates_page_exposes_apply_progress_and_restart_recovery(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            from bt_signature_detector.web import WebServices, create_app
+            app = create_app(WebServices(root / "password.hash", root / "session.key"))
+            client = app.test_client()
+            client.post("/setup", data={"password": "a-good-password"})
+
+            page = client.get("/updates")
+            self.assertIn(b'id="apply-progress"', page.data)
+            self.assertIn(b'aria-live="polite"', page.data)
+            self.assertIn(b"Do not apply again while the Pi is restarting", page.data)
+            script = client.get("/static/updates.js")
+            self.assertIn(b"applyInProgress", script.data)
+            self.assertIn(b"waitForInstalledVersion", script.data)
+            self.assertIn(b"Pi is restarting", script.data)
+            self.assertNotIn(b"staged.innerHTML", script.data)
+            script.close()
+
     def test_signed_upload_persists_as_staged_and_apply_is_id_only(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
