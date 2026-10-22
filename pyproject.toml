@@ -31,4 +31,4 @@ bt_signature_detector = ["web_templates/*.html", "web_static/*.js", "web_static/
 [tool.setuptools.data-files]
 "share/bt-signature-detector/systemd" = ["systemd/*.service", "systemd/*.sudoers"]
 "share/bt-signature-detector/systemd/bluetooth.service.d" = ["systemd/bluetooth.service.d/*.conf"]
-"share/bt-signature-detector/scripts" = ["scripts/apply_update_helper.sh", "scripts/restart_detector_helper.sh", "scripts/device_browser_helper.sh", "scripts/wifi_mode_helper.sh"]
+"share/bt-signature-detector/scripts" = ["scripts/apply_update_helper.sh", "scripts/restart_detector_helper.sh", "scripts/wifi_mode_helper.sh"]
