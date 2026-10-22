@@ -23,7 +23,7 @@ class WatchPageTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200, path)
             for label in (b"Monitor", b"Live Feed", b"Devices", b"Watch Lists", b"Settings", b"Updates"):
                 self.assertIn(label, response.data, (path, label))
-            self.assertIn(b"Build Beta 5", response.data, path)
+            self.assertIn(b"Build Beta 6", response.data, path)
 
     def test_live_page_uses_redacted_scans_and_is_separate_from_monitor(self):
         self.client.post("/setup", data={"password": "a-good-password"})

@@ -153,10 +153,18 @@ document.getElementById('check').addEventListener('click', async () => {
   msg.textContent = 'Checking…';
   try {
     const result = await request('/api/updates/check', {method: 'POST'});
-    available.textContent = `Version ${result.version}: ${result.release_notes}`;
-    downloadAvailable = true;
-    document.getElementById('stage-download').disabled = applyInProgress;
-    msg.textContent = 'Signed release verified.';
+    downloadAvailable = result.update_available === true;
+    if (downloadAvailable) {
+      available.textContent = `Version ${result.version}: ${result.release_notes}`;
+      msg.textContent = 'Signed release verified.';
+    } else if (result.already_installed) {
+      available.textContent = `Version ${result.version} is already installed.`;
+      msg.textContent = 'This Pi is already up to date.';
+    } else {
+      available.textContent = `Version ${result.version} is older than the installed build.`;
+      msg.textContent = 'No newer release is available.';
+    }
+    document.getElementById('stage-download').disabled = applyInProgress || !downloadAvailable;
     await refresh();
   } catch (error) {
     msg.textContent = error.message;
