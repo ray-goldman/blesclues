@@ -800,7 +800,7 @@ def main():
     from .config import load_app_config
     from .store import EventStore
     from .access_point import AccessPointClient
-    from .runtime_cache import RuntimeDeviceCache, RuntimeScanCache, RuntimeWifiCache
+    from .runtime_cache import RuntimeScanCache, RuntimeWifiCache, devices_from_scans
     from .web_updates import WebUpdateManager
     from .watchlists import WatchListStore
     from .company_ids import CompanyIdentifierRegistry
@@ -866,8 +866,8 @@ def main():
         scans=lambda: RuntimeScanCache.read(Path("/run/bt-signature-detector/scans.json"), config.web.max_live_scans),
         wifi_status=current_wifi_status,
         wifi_observations=lambda: RuntimeWifiCache.read(runtime_dir / "wifi-observations.json", config.web.max_live_scans),
-        devices=lambda: RuntimeDeviceCache.read(runtime_dir / "devices.json", config.web.max_live_scans,
-            config.detection.absence_seconds),
+        devices=lambda: devices_from_scans(RuntimeScanCache.read(
+            runtime_dir / "scans.json", config.web.max_live_scans)),
         max_live_scans=config.web.max_live_scans,
         config_file=args.config, ap_update=update_ap,
         set_wifi_mode=lambda mode: wifi_mode_controller.set_mode(mode),

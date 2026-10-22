@@ -19,7 +19,7 @@ from .notifications.audio import AudioNotifier
 from .notifications.dispatcher import NotificationDispatcher
 from .notifications.ntfy import NtfyNotifier
 from .notifications.sms import SmsNotifier
-from .runtime_cache import RuntimeDeviceCache, RuntimeScanCache, write_runtime_status
+from .runtime_cache import RuntimeScanCache, write_runtime_status
 
 
 def _parser():
@@ -103,17 +103,12 @@ def main(argv=None):
                                             timeout_seconds=config.notifications.timeout_seconds)
         runtime_dir = Path("/run/bt-signature-detector")
         has_runtime_dir = sys.platform != "win32" and runtime_dir.is_dir()
-        device_cache = RuntimeDeviceCache(runtime_dir / "devices.json",
-            limit=config.web.max_live_scans,
-            absence_seconds=config.detection.absence_seconds) if has_runtime_dir else None
-        if device_cache is not None:
-            device_cache.flush()
         pipeline = DetectionPipeline(signatures, store=store,
             cooldown_seconds=config.detection.cooldown_seconds,
             absence_seconds=config.detection.absence_seconds,
             global_min_rssi=config.detection.global_min_rssi, dispatcher=dispatcher,
             scan_cache=RuntimeScanCache(runtime_dir / "scans.json", config.web.max_live_scans)
-            if has_runtime_dir else None, device_cache=device_cache,
+            if has_runtime_dir else None,
             builtin_rules=load_builtin_rules(),
             builtin_scorer=CrossProtocolScorer(db_path=runtime_dir / "correlation.sqlite3")
             if sys.platform != "win32" else None)

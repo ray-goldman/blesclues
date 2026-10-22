@@ -42,13 +42,12 @@ class DetectionPipeline:
     def __init__(self, signatures: Sequence[Signature], *, store=None,
                  cooldown_seconds: int = 300, absence_seconds: int = 120,
                  global_min_rssi: int | None = None, dispatcher=None, scan_cache=None,
-                 device_cache=None, builtin_rules: Sequence[BuiltInRule] = (),
+                 builtin_rules: Sequence[BuiltInRule] = (),
                  builtin_scorer: CrossProtocolScorer | None = None) -> None:
         self.signatures = tuple(signatures)
         self.store = store
         self.dispatcher = dispatcher
         self.scan_cache = scan_cache
-        self.device_cache = device_cache
         self.builtin_rules = tuple(builtin_rules)
         self.builtin_scorer = builtin_scorer
         self._builtin_last_alert: dict[tuple[str, str], datetime] = {}
@@ -69,10 +68,6 @@ class DetectionPipeline:
             try: self.scan_cache.add(advertisement)
             except OSError:
                 logger.warning("runtime scan cache is unavailable", exc_info=True)
-        if self.device_cache is not None:
-            try: self.device_cache.add(advertisement)
-            except OSError:
-                logger.warning("runtime device cache is unavailable", exc_info=True)
         matches = [signature for signature in self.signatures if signature.ignorelist is None
                    and match_signature(signature, advertisement)]
         events = self.filter.observe(advertisement, matches)

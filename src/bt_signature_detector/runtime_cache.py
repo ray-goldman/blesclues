@@ -29,7 +29,11 @@ class RuntimeScanCache:
             "rssi": advertisement.rssi,
             "timestamp": advertisement.timestamp.isoformat(),
             "manufacturer_data": {str(company_id): value[:32].hex().upper()
-                for company_id, value in advertisement.manufacturer_data.items()}}
+                for company_id, value in advertisement.manufacturer_data.items()},
+            "address_type": advertisement.address_type,
+            "service_uuids": list(advertisement.service_uuids),
+            "service_data": {str(uuid): value[:32].hex().upper()
+                for uuid, value in advertisement.service_data.items()}}
         with self._lock:
             self._items.append(item)
             now = time.monotonic()
@@ -70,6 +74,29 @@ class RuntimeScanCache:
             return value[-limit:] if isinstance(value, list) else []
         except (OSError, json.JSONDecodeError):
             return []
+
+
+def devices_from_scans(scans: Sequence[dict]) -> list[dict]:
+    """Build the device inventory from the exact volatile observations shown in Live Feed."""
+    devices: OrderedDict[str, dict] = OrderedDict()
+    for scan in scans:
+        if not isinstance(scan, dict):
+            continue
+        identifier = scan.get("identifier")
+        timestamp = scan.get("timestamp")
+        if not isinstance(identifier, str) or not identifier or not isinstance(timestamp, str):
+            continue
+        current = devices.get(identifier)
+        if current is None:
+            current = {"identifier": identifier, "first_seen": timestamp, "last_seen": timestamp}
+        current["last_seen"] = timestamp
+        for field in ("name", "address_type", "rssi", "manufacturer_data", "service_uuids", "service_data"):
+            value = scan.get(field)
+            if value is not None and value != {} and value != []:
+                current[field] = value
+        devices[identifier] = current
+        devices.move_to_end(identifier)
+    return list(devices.values())
 
 
 class RuntimeDeviceCache:
