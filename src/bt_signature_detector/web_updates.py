@@ -9,6 +9,23 @@ from .updates import HttpTransport, UpdateVerifier, check_release, stage_downloa
 from .updater_service import _load_public_key
 
 
+def _version_key(value: str):
+    match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:(a|b|rc)(\d+))?", value)
+    if not match:
+        return None
+    major, minor, patch, prerelease, number = match.groups()
+    rank = {"a": 0, "b": 1, "rc": 2, None: 3}[prerelease]
+    return int(major), int(minor), int(patch), rank, int(number or 0)
+
+
+def _is_newer(candidate: str, installed: str) -> bool:
+    candidate_key = _version_key(candidate)
+    installed_key = _version_key(installed)
+    if candidate_key is None or installed_key is None:
+        return candidate != installed
+    return candidate_key > installed_key
+
+
 class WebUpdateManager:
     """Unprivileged release checker/stager. Applying delegates to the fixed root helper."""
     def __init__(self, *, manifest_url: str | None, public_key_file: Path,
@@ -43,6 +60,9 @@ class WebUpdateManager:
             try:
                 release = verifier.verify_bundle(path)
                 version = release.manifest.version
+                if not _is_newer(version, self.installed_version):
+                    path.unlink(missing_ok=True)
+                    continue
                 if version in recovered_versions:
                     path.unlink(missing_ok=True)
                     continue
@@ -54,6 +74,10 @@ class WebUpdateManager:
                 continue
 
     def _remember_staged(self, staged, source: str) -> dict:
+        if not _is_newer(staged.manifest.version, self.installed_version):
+            staged.path.unlink(missing_ok=True)
+            state = "already installed" if staged.manifest.version == self.installed_version else "older than the installed version"
+            raise ValueError(f"Version {staged.manifest.version} is {state}")
         result = {"id": staged.staged_id, "version": staged.manifest.version,
                   "release_notes": staged.manifest.release_notes, "source": source}
         with self._lock:
@@ -71,18 +95,33 @@ class WebUpdateManager:
         except Exception as exc:
             with self._lock: self._last_check = f"Check failed: {exc}"
             raise
+        version = release.manifest.version
+        available = _is_newer(version, self.installed_version)
         with self._lock:
-            self._latest = release
-            self._last_check = "Release available"
-        return {"version": release.manifest.version, "release_notes": release.manifest.release_notes}
+            self._latest = release if available else None
+            if available:
+                self._last_check = "Release available"
+            elif version == self.installed_version:
+                self._last_check = "Installed version is current"
+            else:
+                self._last_check = "Installed version is newer"
+        return {"version": version, "release_notes": release.manifest.release_notes,
+                "update_available": available, "already_installed": version == self.installed_version}
 
     def upload(self, stream) -> dict:
         staged = stage_upload(stream, self.staging_dir, self._verifier())
         return self._remember_staged(staged, "upload")
 
     def stage_download(self) -> dict:
-        with self._lock: release = self._latest
-        if release is None: raise ValueError("Check for a release before staging a download")
+        with self._lock:
+            release = self._latest
+            last_check = self._last_check
+        if release is None:
+            if last_check == "Installed version is current":
+                raise ValueError("The installed version is already current")
+            if last_check == "Installed version is newer":
+                raise ValueError("No newer release is available")
+            raise ValueError("Check for a release before staging a download")
         staged = stage_download(release, self.transport, self.staging_dir, self._verifier(), self.timeout)
         return self._remember_staged(staged, "download")
 
