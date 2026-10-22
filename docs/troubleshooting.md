@@ -24,17 +24,11 @@ sudo journalctl -u bt-signature-detector.service -f
 
 Passive mode requires BlueZ `or_patterns`. A generic or synthetic pattern may not match nearby devices, and some controllers cannot monitor passively. The scanner retries with a capped delay; it does not switch to active scanning on its own.
 
-For a Devices scan, check the status and any error shown on that page. The `scanner-status.json` snapshot in `/run/bt-signature-detector` shows whether the process is active or retrying after an adapter error. Use **Stop and restore filters** even if the adapter is unavailable. Reboot also clears temporary browser mode.
-
-If **Start device scan** reports an exit status, the error panel shows the helper's sanitized output and remains visible while status updates arrive. Check the fixed helper commands as the `bt-web` account, then inspect the scanner log:
+The **Devices** page reads the same configured BLE scan as the detector. **Pause updates** only stops this page from refreshing; the radio and Live Feed continue. If the displayed rows stop changing, use **Resume updates** and check whether advertisements pass the configured BlueZ filters. The `scanner-status.json` snapshot in `/run/bt-signature-detector` shows whether the scanner is active or retrying after an adapter error.
 
 ```sh
-sudo -u bt-web sudo -n /usr/local/sbin/bt-detector-device-browser start
-sudo -u bt-web sudo -n /usr/local/sbin/bt-detector-device-browser stop
 sudo journalctl -u bt-signature-detector.service -n 100 --no-pager
 ```
-
-The sudo rule allows only these start and stop actions.
 
 ## Wi-Fi scan is unavailable
 
@@ -51,7 +45,7 @@ The scanner uses `iw` and `CAP_NET_ADMIN`; it does not join networks. Raw result
 
 Check the signature file, RSSI threshold, and three-observation minimum. RSSI values closer to zero indicate a stronger signal. Custom signature alerts require `confidence: confirmed` and notifications enabled. Bundled BLE and Wi-Fi indicators use a separate threshold of 40; a match from the other protocol within 60 seconds adds 20 points to the later hit. These are indicators for review, not confirmation of identity, ownership, or activity. Use `detector test-alert` to test enabled backends. Add `--confirm-sms` to send an actual SMS test.
 
-For a saved watch rule, check its passive coverage on **Watch Lists**. **Browser scan only** rules cannot contribute an acquisition filter and will not match in filtered passive mode unless an advertisement also passes a manually configured BlueZ filter. **Partial** coverage applies to `any` rules with a mix of filterable and unfilterable criteria. A watch-rule change restarts the scanner; if that restart fails, the prior signature file is restored. The Live Feed shows only the packets the current scan mode receives and clears on reboot.
+For a saved watch rule, check its passive coverage on **Watch Lists**. **No derived filter** rules cannot contribute an acquisition filter and will match only if an advertisement also passes another configured BlueZ filter. **Partial** coverage applies to `any` rules with a mix of filterable and unfilterable criteria. A watch-rule change restarts the scanner; if that restart fails, the prior signature file is restored. The Live Feed shows only the packets the configured scan mode receives and clears on reboot.
 
 Manufacturer-data company labels come from the bundled Bluetooth SIG Assigned Numbers registry. An unknown company ID remains visible numerically. The assigned company label is not proof of the observed device's manufacturer or owner.
 

@@ -111,27 +111,21 @@ class InstallScriptTests(unittest.TestCase):
         install = (self.root / "scripts" / "install.sh").read_text()
         self.assertIn("systemctl restart bt-signature-detector-web.service", install)
 
-    def test_installer_deploys_and_removes_temporary_browser_helper(self):
+    def test_installer_removes_legacy_browser_privileges(self):
         install = (self.root / "scripts" / "install.sh").read_text()
         uninstall = (self.root / "scripts" / "uninstall.sh").read_text()
-        sudoers = (self.root / "systemd" / "bt-signature-detector-device-browser.sudoers").read_text()
-        self.assertIn("device_browser_helper.sh", install)
-        self.assertIn("bt-signature-detector-device-browser.sudoers", install)
-        self.assertIn("/usr/local/sbin/bt-detector-device-browser start", sudoers)
-        self.assertIn("/usr/local/sbin/bt-detector-device-browser stop", sudoers)
+        self.assertNotIn("device_browser_helper.sh", install)
+        self.assertIn("rm -f /etc/sudoers.d/bt-signature-detector-device-browser /usr/local/sbin/bt-detector-device-browser", install)
         self.assertIn("/usr/local/sbin/bt-detector-device-browser", uninstall)
         self.assertIn("bt-signature-detector-device-browser", uninstall)
 
-    def test_web_service_has_separate_writable_volatile_device_browser_state(self):
+    def test_web_service_does_not_need_writable_browser_runtime_state(self):
         web_unit = (self.root / "systemd" / "bt-signature-detector-web.service").read_text()
-        browser = (self.root / "src" / "bt_signature_detector" / "device_browser.py").read_text()
         cli = (self.root / "src" / "bt_signature_detector" / "cli.py").read_text()
-        marker = "/run/bt-signature-detector-web/device-browser.json"
         self.assertIn("ReadOnlyPaths=/run/bt-signature-detector", web_unit)
-        self.assertIn("RuntimeDirectory=bt-signature-detector bt-signature-detector-web", web_unit)
-        self.assertIn("ReadWritePaths=/var/lib/bt-signature-detector /etc/bt-signature-detector /run/bt-signature-detector-web", web_unit)
-        self.assertIn(marker, browser)
-        self.assertIn(marker, cli)
+        self.assertIn("RuntimeDirectory=bt-signature-detector", web_unit)
+        self.assertNotIn("/run/bt-signature-detector-web", web_unit)
+        self.assertNotIn("device-browser.json", cli)
 
     def test_hidden_ap_migration_disables_legacy_and_preserves_new_settings(self):
         spec = importlib.util.spec_from_file_location("migrate_hidden_ap_config", self.root / "scripts" / "migrate_hidden_ap_config.py")

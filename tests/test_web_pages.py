@@ -65,7 +65,7 @@ class WatchPageTests(unittest.TestCase):
         asset = asset_response.data
         asset_response.close()
         self.assertIn(b"No watch lists yet", page.data)
-        for text in (b"Browser scan only", b"Partial", b"Disabled", b"X-CSRF-Token"):
+        for text in (b"No derived filter", b"Partial", b"Disabled", b"X-CSRF-Token"):
             self.assertIn(text, asset)
         self.assertIn(b"Ignore lists", page.data)
         self.assertIn(b"/api/ignorelists", asset)

@@ -6,7 +6,7 @@ let listType = 'watch';
 function watchEscape(value) { return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char])); }
 function apiBase() { return listType === 'ignore' ? '/api/ignorelists' : '/api/watchlists'; }
 function kindName() { return listType === 'ignore' ? 'ignore list' : 'watch list'; }
-function coverageLabel(value) { return ({full: 'Full', partial: 'Partial', browser_only: 'Browser scan only', wifi_scan: 'Wi-Fi scans', disabled: 'Disabled'})[value] || 'Scan rule'; }
+function coverageLabel(value) { return ({full: 'Full', partial: 'Partial', browser_only: 'No derived filter', wifi_scan: 'Wi-Fi scans', disabled: 'Disabled'})[value] || 'Scan rule'; }
 
 function prettyCriteria(criteria = {}) {
   const labels = [];
@@ -40,7 +40,7 @@ function renderLists() {
   document.getElementById('watchlists-layout').hidden = savedLists.length === 0;
   empty.hidden = savedLists.length > 0;
   document.getElementById('list-empty-title').textContent = listType === 'ignore' ? 'No ignore lists yet' : 'No watch lists yet';
-  document.getElementById('list-empty-copy').textContent = listType === 'ignore' ? 'Save an observation from Devices to keep it out of the live view.' : 'Start a temporary scan in Devices, then save an observation as a rule.';
+    document.getElementById('list-empty-copy').textContent = listType === 'ignore' ? 'Save an observation from Devices to keep it out of the live view.' : 'Open Devices and save an observation as a rule.';
   if (!savedLists.length) return;
   if (!savedLists.some(item => item.name === activeList)) activeList = savedLists[0].name;
   renderSelectedList();

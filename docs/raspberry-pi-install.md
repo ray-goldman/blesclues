@@ -23,7 +23,7 @@ Settings lists 13 bundled BLE and Wi-Fi indicators derived from the supplied sig
 
 Wi-Fi discovery is off by default. When enabled, the Pi uses `iw` to scan every 15 seconds without joining or authenticating to networks. The Wi-Fi radio can scan or host the hidden hotspot, but cannot do both at once. Switching modes stops the current service before starting the other; the dashboard stays available over Ethernet. SSID and BSSID results stay in bounded memory under `/run`; only qualifying detections enter event history. Scan results are not written to the SD card.
 
-The authenticated **Devices page** starts a temporary broad BLE scan using active scan requests. It never connects to or pairs with devices. The live list is grouped by exact observed BLE address, bounded in memory, and expires after the configured absence interval; no device history is saved. **Pause** stops broad scanning and holds the current list on screen. **Resume scan** starts a fresh scan window. **Stop and restore filters** returns to the saved Bluetooth mode and clears the displayed list. A scanner restart during browsing keeps the temporary mode; browser mode ends on reboot and returns to the saved mode. The temporary mode does not change `/etc/bt-signature-detector/detector.yaml`. The page also lists nearby Wi-Fi networks when optional Wi-Fi scanning is enabled in **Settings**; results remain in temporary memory, and scanning is unavailable while the hidden admin hotspot is active.
+The authenticated **Devices page** shows devices received by the continuously running scanner with its configured passive BlueZ filters. The live list is grouped by exact observed BLE address, bounded in memory, and expires after the configured absence interval; no device history is saved. **Pause updates** freezes the BLE and Wi-Fi results shown on this page; the radios keep running. **Resume updates** refreshes the displayed results. The page also lists nearby Wi-Fi networks when optional Wi-Fi scanning is enabled in **Settings**; results remain in temporary memory, and scanning is unavailable while the hidden admin hotspot is active.
 
 The live BLE/Wi-Fi scan buffers are held in `/run`; routine observations and per-scan results are not logged to disk. Qualifying detections are stored in bounded SQLite history. Service messages go to journald with per-service rate limits to keep fault loops from flooding the SD card.
 
@@ -31,16 +31,16 @@ The live BLE/Wi-Fi scan buffers are held in `/run`; routine observations and per
 
 After signing in, the navigation includes **Monitor**, **Live Feed**, **Devices**, **Watch Lists**, **Settings**, and **Updates**. Live Feed shows a bounded window of BLE advertisements with addresses redacted, plus nearby SSIDs and BSSIDs when Wi-Fi scanning is enabled. Devices lists the latest Wi-Fi observations alongside the temporary BLE inventory. The observations are held in `/run`, not saved as a device inventory, and clear when the scan service stops or the Pi reboots.
 
-In **Devices**, start a temporary broad scan and select **Watch this** on a row to build a named rule. Criteria can use the exact observed address or its first one to three MAC octets; an exact, contained, or regular-expression name; a SIG company ID with an optional payload prefix; or a service UUID or service-data prefix. Address prefixes can match several devices, and a device address may rotate. New rules require at least three matching observations and have notifications disabled.
+In **Devices**, select **Watch this** on a row to build a named rule. Criteria can use the exact observed address or its first one to three MAC octets; an exact, contained, or regular-expression name; a SIG company ID with an optional payload prefix; or a service UUID or service-data prefix. Address prefixes can match several devices, and a device address may rotate. New rules require at least three matching observations and have notifications disabled.
 
-Watch rules are stored in the signature file and evaluated by the scanner. They can match only advertisements received in the active scan mode. Coverage is:
+Watch rules are stored in the signature file and evaluated by the scanner. They can match only advertisements received in the configured passive scan mode. Coverage is:
 
 - **Full:** an enabled rule has a compatible passive acquisition filter. For an `all` rule, one compatible criterion is enough.
 - **Partial:** an `any` rule mixes criteria that can and cannot produce a passive filter.
-- **Browser scan only:** no passive filter can be derived.
+- **No derived filter:** no passive acquisition filter can be derived.
 - **Disabled:** the rule is paused.
 
-Derived filters are combined with the manually configured BlueZ filters when the scanner starts; they do not replace them. BlueZ filters are advanced patterns over raw advertisement bytes, not MAC addresses. An incorrect pattern can hide observations. The Device Browser ignores these filters while its temporary broad scan is running. **Stop and restore filters** returns to the saved scan mode without changing its configuration.
+Derived filters are combined with the manually configured BlueZ filters when the scanner starts; they do not replace them. BlueZ filters are advanced patterns over raw advertisement bytes, not MAC addresses. An incorrect pattern can hide observations. Devices always reflects the advertisements received under these configured filters.
 
 Creating, editing, enabling, disabling, or deleting a watch rule writes the signature file atomically and restarts the scanner. If the restart fails, BLE's Clues restores the previous file and reports the error. Operator changes are the only writes to watch-rule configuration. Qualifying matches use the existing bounded SQLite history; raw advertisements and the device list remain under `/run` and clear on reboot.
 
@@ -48,7 +48,7 @@ Manufacturer-data company IDs show an assigned company name when the ID appears 
 
 ## Configure passive scanning
 
-Edit `/etc/bt-signature-detector/detector.yaml` and select the adapter and BlueZ `or_patterns` for the advertisements you intend to recognize. Passive BlueZ scanning requires at least one OR pattern. A pattern uses an advertisement data start position, AD data type, and hexadecimal bytes. The included `010203` pattern is synthetic. If the controller does not support passive monitoring, inspect the logs; normal filtered mode retries without changing to active scanning. Broad active scanning is only enabled explicitly from the Devices page.
+Edit `/etc/bt-signature-detector/detector.yaml` and select the adapter and BlueZ `or_patterns` for the advertisements you intend to recognize. Passive BlueZ scanning requires at least one OR pattern. A pattern uses an advertisement data start position, AD data type, and hexadecimal bytes. The included `010203` pattern is synthetic. If the controller does not support passive monitoring, inspect the logs; normal filtered mode retries without changing to active scanning.
 
 Add validated, documented signatures in `/etc/bt-signature-detector/signatures.yaml`. Use manufacturer data masks, service UUID/data, names, or exact observed identifiers only when lawful and appropriate. A detection requires at least three matching observations by default; the default alert cooldown is 300 seconds. RSSI is approximate and does not establish distance.
 
