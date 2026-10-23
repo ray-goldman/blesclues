@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, asdict
 import base64
+from datetime import datetime, timezone
 import hashlib
 import hmac
 import ipaddress
@@ -22,6 +23,9 @@ from flask import Flask, abort, jsonify, redirect, render_template, request, ses
 from .watchlists import WatchListStore
 from .watch_filters import watch_rule_filter_coverage
 from .company_ids import CompanyIdentifierRegistry
+from .models import Advertisement
+from .signatures import match_signature, match_wifi_signature
+from .wifi_scanner import WifiObservation
 from . import BUILD_NAME, __version__
 
 logger = logging.getLogger(__name__)
@@ -382,6 +386,117 @@ def create_app(services: WebServices) -> Flask:
                 item["manufacturer_names"] = manufacturer_names(item.get("manufacturer_data"))
                 if "identifier" in item: item["identifier"] = "redacted"
         return jsonify({"scans": scans})
+
+    @app.get("/api/watchlists/live")
+    @login_required
+    def api_live_watch_matches():
+        if services.watchlists is None:
+            return jsonify({"matches": [], "ble": {"state": "unavailable"},
+                "wifi": {"state": "unavailable"}}), 503
+        try:
+            signatures = [signature for signature in services.watchlists.list_signatures()
+                if signature.enabled and signature.watchlist and not signature.ignorelist]
+            grouped = {}
+            ble_scans = services.scans()[-services.max_live_scans:]
+            wifi_observations = services.wifi_observations()[-services.max_live_scans:]
+            wifi_status = services.wifi_status()
+            for scan in ble_scans:
+                if not isinstance(scan, dict):
+                    continue
+                try:
+                    timestamp = datetime.fromisoformat(str(scan["timestamp"]).replace("Z", "+00:00"))
+                    if timestamp.tzinfo is None:
+                        continue
+                    manufacturer_data = {int(company_id, 0): bytes.fromhex(value)
+                        for company_id, value in scan.get("manufacturer_data", {}).items()
+                        if isinstance(company_id, str) and isinstance(value, str)}
+                    service_data = {str(uuid).lower(): bytes.fromhex(value)
+                        for uuid, value in scan.get("service_data", {}).items()
+                        if isinstance(value, str)}
+                    advertisement = Advertisement(identifier=str(scan["identifier"]),
+                        name=scan.get("name"), manufacturer_data=manufacturer_data,
+                        service_uuids=tuple(scan.get("service_uuids") or ()),
+                        service_data=service_data, rssi=scan.get("rssi"), timestamp=timestamp,
+                        address_type=scan.get("address_type"))
+                except (KeyError, TypeError, ValueError):
+                    continue
+                for signature in signatures:
+                    if signature.protocol != "ble" or not match_signature(signature, advertisement):
+                        continue
+                    key = ("ble", advertisement.identifier.casefold())
+                    current = grouped.get(key)
+                    if current is None:
+                        current = {"protocol": "ble", "identifier": advertisement.identifier,
+                            "name": advertisement.name or "Unnamed device", "rssi": advertisement.rssi,
+                            "last_seen": advertisement.timestamp.isoformat(), "matches": {}}
+                        grouped[key] = current
+                    if advertisement.timestamp.isoformat() >= current["last_seen"]:
+                        current.update({"name": advertisement.name or "Unnamed device",
+                            "rssi": advertisement.rssi,
+                            "last_seen": advertisement.timestamp.isoformat()})
+                    current["matches"][signature.signature_id] = {
+                        "list_name": signature.watchlist, "rule_name": signature.name}
+
+            for item in (wifi_observations if wifi_status.get("scan_active") else ()):
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    observed_at = datetime.fromisoformat(str(item["observed_at"]).replace("Z", "+00:00"))
+                    if observed_at.tzinfo is None:
+                        continue
+                    observation = WifiObservation(str(item.get("ssid") or ""), str(item["bssid"]),
+                        item.get("signal"), item.get("channel"), item.get("security"), observed_at)
+                except (KeyError, TypeError, ValueError):
+                    continue
+                for signature in signatures:
+                    if signature.protocol != "wifi" or not match_wifi_signature(signature, observation):
+                        continue
+                    key = ("wifi", observation.bssid.casefold())
+                    current = grouped.get(key)
+                    if current is None:
+                        current = {"protocol": "wifi", "identifier": observation.bssid,
+                            "name": observation.ssid or "Hidden network", "rssi": observation.signal,
+                            "last_seen": observation.observed_at.isoformat(),
+                            "channel": observation.channel, "security": observation.security, "matches": {}}
+                        grouped[key] = current
+                    if observation.observed_at.isoformat() >= current["last_seen"]:
+                        current.update({"name": observation.ssid or "Hidden network",
+                            "rssi": observation.signal, "last_seen": observation.observed_at.isoformat(),
+                            "channel": observation.channel, "security": observation.security})
+                    current["matches"][signature.signature_id] = {
+                        "list_name": signature.watchlist, "rule_name": signature.name}
+
+            now = datetime.now(timezone.utc)
+            def freshness(stamps, enabled=True):
+                parsed = []
+                for value in stamps:
+                    try:
+                        stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                        if stamp.tzinfo is not None:
+                            parsed.append(stamp.astimezone(timezone.utc))
+                    except ValueError:
+                        continue
+                latest = max(parsed, default=None)
+                if not enabled:
+                    state = "disabled"
+                elif latest is None:
+                    state = "waiting"
+                else:
+                    state = "fresh" if (now - latest).total_seconds() <= 30 else "stale"
+                return {"state": state, "last_seen": latest.isoformat() if latest else None}
+
+            ble_stamps = [scan.get("timestamp") for scan in ble_scans if isinstance(scan, dict)]
+            wifi_stamps = [item.get("observed_at") for item in wifi_observations if isinstance(item, dict)]
+            matches = []
+            for item in grouped.values():
+                item["matches"] = sorted(item["matches"].values(),
+                    key=lambda match: (match["list_name"].casefold(), match["rule_name"].casefold()))
+                matches.append(item)
+            matches.sort(key=lambda item: item["last_seen"], reverse=True)
+            return jsonify({"matches": matches, "ble": freshness(ble_stamps),
+                "wifi": freshness(wifi_stamps, bool(wifi_status.get("scan_active")))})
+        except (OSError, RuntimeError, ValueError) as exc:
+            return jsonify({"error": str(exc)}), 503
 
     def manufacturer_names(manufacturer_data):
         registry = services.company_identifiers
@@ -800,7 +915,7 @@ def main():
     from .config import load_app_config
     from .store import EventStore
     from .access_point import AccessPointClient
-    from .runtime_cache import RuntimeDeviceCache, RuntimeScanCache, RuntimeWifiCache
+    from .runtime_cache import RuntimeScanCache, RuntimeWifiCache, devices_from_scans
     from .web_updates import WebUpdateManager
     from .watchlists import WatchListStore
     from .company_ids import CompanyIdentifierRegistry
@@ -866,8 +981,8 @@ def main():
         scans=lambda: RuntimeScanCache.read(Path("/run/bt-signature-detector/scans.json"), config.web.max_live_scans),
         wifi_status=current_wifi_status,
         wifi_observations=lambda: RuntimeWifiCache.read(runtime_dir / "wifi-observations.json", config.web.max_live_scans),
-        devices=lambda: RuntimeDeviceCache.read(runtime_dir / "devices.json", config.web.max_live_scans,
-            config.detection.absence_seconds),
+        devices=lambda: devices_from_scans(RuntimeScanCache.read(
+            runtime_dir / "scans.json", config.web.max_live_scans)),
         max_live_scans=config.web.max_live_scans,
         config_file=args.config, ap_update=update_ap,
         set_wifi_mode=lambda mode: wifi_mode_controller.set_mode(mode),

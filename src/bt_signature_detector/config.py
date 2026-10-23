@@ -18,7 +18,7 @@ class OrPatternConfig:
 @dataclass(frozen=True, slots=True)
 class BluetoothConfig:
     adapter: str | None = None
-    scan_mode: str = "passive"
+    scan_mode: str = "active"
     or_patterns: tuple[OrPatternConfig, ...] = ()
     reconnect_initial_seconds: float = 1.0
     reconnect_max_seconds: float = 30.0
@@ -180,7 +180,7 @@ def validate_config_data(data: Mapping[str, object], *, base_dir: Path | None = 
         raise ValueError("schema_version must be 1")
 
     b = _section(root, "bluetooth", {"adapter", "scan_mode", "or_patterns", "reconnect_initial_seconds", "reconnect_max_seconds"})
-    scan_mode = b.get("scan_mode", "passive")
+    scan_mode = b.get("scan_mode", "active")
     if scan_mode not in {"passive", "active"}:
         raise ValueError("bluetooth.scan_mode must be passive or active")
     patterns_raw = b.get("or_patterns", [])

@@ -13,6 +13,43 @@ function companyLabel(id, names) {
   return names?.[String(id)] ? `SIG company: ${names[String(id)]} · ID ${hex}` : `Unknown SIG company ID · ${hex}`;
 }
 
+function proximity(rssi) {
+  if (!Number.isFinite(rssi)) return {className: 'signal-unknown', label: 'Signal unavailable'};
+  if (rssi >= -55) return {className: 'signal-close', label: 'Close'};
+  if (rssi >= -75) return {className: 'signal-near', label: 'Nearby'};
+  return {className: 'signal-far', label: 'Weak signal'};
+}
+
+function renderWatchMatches(data) {
+  const target = document.getElementById('watch-live-matches');
+  const state = document.getElementById('watch-live-state');
+  const freshness = [data.ble, data.wifi].filter(item => item.state !== 'disabled');
+  const hasStale = freshness.some(item => item.state === 'stale');
+  const hasWaiting = freshness.some(item => item.state === 'waiting');
+  const sourceLabel = item => item.state === 'stale' ? `${item.name} stale` : item.state === 'waiting' ? `${item.name} waiting` : `${item.name} current`;
+  const freshnessText = freshness.map((item, index) => sourceLabel({...item, name: item === data.ble ? 'BLE' : 'Wi-Fi'})).join(' · ');
+  state.className = `state-tag ${hasStale ? 'stale' : hasWaiting ? 'waiting' : 'ready'}`;
+  state.innerHTML = `<i></i>${feedEscape(freshnessText || 'No radio scans enabled')}`;
+  if (!data.matches?.length) {
+    target.innerHTML = '<p class="empty-state watch-live-empty">No saved watch rules matched the observations in memory.</p>';
+    return;
+  }
+  target.innerHTML = data.matches.map(item => {
+    const signal = Number.isFinite(item.rssi) ? `${item.rssi} dBm` : 'No signal';
+    const level = proximity(item.rssi);
+    const matches = item.matches.map(match => `<span class="watch-live-rule"><strong>${feedEscape(match.list_name)}</strong><small>${feedEscape(match.rule_name)}</small></span>`).join('');
+    const seen = new Date(item.last_seen);
+    return `<article class="watch-live-card ${level.className}">
+      <div class="watch-live-card-top"><span class="watch-live-protocol">${feedEscape(item.protocol.toUpperCase())}</span><span class="proximity-label">${feedEscape(level.label)}</span></div>
+      <h3>${feedEscape(item.name)}</h3>
+      <div class="watch-live-signal"><strong>${feedEscape(signal)}</strong><span class="signal-meter" aria-hidden="true"><i></i></span></div>
+      <p class="watch-live-address mono">${feedEscape(item.identifier)}</p>
+      <div class="watch-live-rules">${matches}</div>
+      <p class="watch-live-seen">Last seen <time>${Number.isNaN(seen.valueOf()) ? '—' : feedEscape(seen.toLocaleTimeString())}</time></p>
+    </article>`;
+  }).join('');
+}
+
 function renderFeed(scans) {
   const target = document.getElementById('feed-rows');
   document.getElementById('feed-count').textContent = `${scans.length} observation${scans.length === 1 ? '' : 's'}`;
@@ -55,12 +92,13 @@ function renderWifiObservations(observations, status) {
 
 async function loadFeed() {
   try {
-    const responses = await Promise.all(['/api/scans', '/api/wifi/status', '/api/wifi/observations'].map(url => fetch(url, { credentials: 'same-origin' })));
+    const responses = await Promise.all(['/api/scans', '/api/wifi/status', '/api/wifi/observations', '/api/watchlists/live'].map(url => fetch(url, { credentials: 'same-origin' })));
     if (responses.some(response => response.status === 401)) { location.href = '/login'; return; }
     if (responses.some(response => !response.ok)) throw Error('Could not read the radio window. Try refreshing.');
-    const [data, wifiStatus, wifiData] = await Promise.all(responses.map(response => response.json()));
+    const [data, wifiStatus, wifiData, watchData] = await Promise.all(responses.map(response => response.json()));
     renderFeed(data.scans || []);
     renderWifiObservations(wifiData.observations || [], wifiStatus);
+    renderWatchMatches(watchData);
     const state = document.getElementById('feed-state');
     state.className = 'state-tag ready';
     state.innerHTML = '<i></i>Feed available';

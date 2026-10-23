@@ -46,9 +46,11 @@ Creating, editing, enabling, disabling, or deleting a watch rule writes the sign
 
 Manufacturer-data company IDs show an assigned company name when the ID appears in the bundled Bluetooth SIG Assigned Numbers snapshot. Lookup is local and needs no network access during scanning. An assigned-number label does not establish who made, owns, or operates an observed device. Company IDs are separate from BLE address OUIs.
 
-## Configure passive scanning
+## Configure BLE scanning
 
-Edit `/etc/bt-signature-detector/detector.yaml` and select the adapter and BlueZ `or_patterns` for the advertisements you intend to recognize. Passive BlueZ scanning requires at least one OR pattern. A pattern uses an advertisement data start position, AD data type, and hexadecimal bytes. The included `010203` pattern is synthetic. If the controller does not support passive monitoring, inspect the logs; normal filtered mode retries without changing to active scanning.
+The default is active BLE scanning, which lists nearby advertisers on the Devices page and lets signature rules identify matches. Pause and Resume on that page only stop and resume browser updates; the scanner keeps running.
+
+To use passive scanning instead, edit `/etc/bt-signature-detector/detector.yaml`, set `bluetooth.scan_mode` to `passive`, and configure BlueZ `or_patterns` for the advertisements you intend to recognize. A pattern uses an advertisement data start position, AD data type, and hexadecimal bytes. Passive scanning only reports advertisers matching those patterns and does not fall back to active scanning. If the controller does not support passive monitoring, inspect the logs.
 
 Add validated, documented signatures in `/etc/bt-signature-detector/signatures.yaml`. Use manufacturer data masks, service UUID/data, names, or exact observed identifiers only when lawful and appropriate. A detection requires at least three matching observations by default; the default alert cooldown is 300 seconds. RSSI is approximate and does not establish distance.
 

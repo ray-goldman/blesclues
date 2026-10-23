@@ -1,12 +1,7 @@
 schema_version: 1
 bluetooth:
-  scan_mode: passive
-  # Replace this synthetic AD-pattern filter for the adapter and advertisements in use.
-  # Passive BlueZ scanning requires at least one pattern and never falls back to active.
-  or_patterns:
-    - start_position: 0
-      ad_data_type: 255
-      pattern: "010203"
+  scan_mode: active
+  # Passive scanning is available when BlueZ or_patterns are configured.
 detection:
   signature_file: signatures.example.yaml
   min_observations: 3
